@@ -8,7 +8,7 @@ const NAV = [
   { id: 'dashboard',   label: 'Dashboard',    icon: LayoutDashboard },
   { id: 'patient',     label: 'Patient Data', icon: Users },
   { id: 'simulation',  label: 'Simulation',   icon: Activity },
-  { id: 'trends',      label: 'Trends',       icon: TrendingUp },
+  { id: 'trends',      label: 'Relationships', icon: TrendingUp },
   { id: 'alerts',      label: 'Alerts',       icon: Bell },
   { id: 'settings',    label: 'Settings',     icon: Settings },
 ];

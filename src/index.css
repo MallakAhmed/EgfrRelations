@@ -6,8 +6,8 @@
   *, *::before, *::after { box-sizing: border-box; }
   html, body, #root { height: 100%; margin: 0; padding: 0; }
   body {
-    font-family: 'Inter', system-ui, sans-serif;
-    background-color: #020812;
+    font-family: Arial, sans-serif;
+    background: linear-gradient(180deg, #071428 0%, #050d1d 58%, #040916 100%);
     color: #e2e8f0;
     overflow: hidden;
   }
@@ -19,14 +19,14 @@
 
 @layer components {
   .glass-panel {
-    background: rgba(8, 15, 30, 0.85);
+    background: rgba(9, 18, 36, 0.88);
     backdrop-filter: blur(14px);
-    border: 1px solid rgba(0, 212, 255, 0.12);
+    border: 1px solid rgba(106, 130, 171, 0.18);
   }
   .glass-card {
-    background: rgba(11, 19, 38, 0.7);
+    background: rgba(13, 22, 42, 0.75);
     backdrop-filter: blur(8px);
-    border: 1px solid rgba(0, 212, 255, 0.1);
+    border: 1px solid rgba(117, 140, 184, 0.14);
   }
   .grid-bg {
     background-image:
@@ -34,7 +34,8 @@
       linear-gradient(90deg, rgba(0,212,255,0.025) 1px, transparent 1px);
     background-size: 44px 44px;
   }
-  .glow-text { text-shadow: 0 0 20px rgba(0,212,255,0.8); }
+  .glow-text { text-shadow: 0 0 10px rgba(131, 153, 196, 0.45); }
+  .font-orbitron { font-family: Arial, sans-serif !important; letter-spacing: 0.2px; }
 }
 
 /* ── Sliders ─────────────────────────────────────── */
@@ -54,19 +55,19 @@
   -webkit-appearance: none;
   width: 14px; height: 14px;
   border-radius: 50%;
-  background: #00d4ff;
+  background: #7b96c9;
   cursor: pointer;
-  box-shadow: 0 0 8px rgba(0,212,255,0.9), 0 0 16px rgba(0,212,255,0.4);
+  box-shadow: 0 0 6px rgba(123,150,201,0.6), 0 0 10px rgba(123,150,201,0.25);
   transition: box-shadow 0.2s, transform 0.15s;
 }
 .slider::-webkit-slider-thumb:hover {
-  box-shadow: 0 0 14px rgba(0,212,255,1), 0 0 28px rgba(0,212,255,0.6);
+  box-shadow: 0 0 10px rgba(123,150,201,0.8), 0 0 18px rgba(123,150,201,0.35);
   transform: scale(1.25);
 }
 .slider::-moz-range-thumb {
   width: 14px; height: 14px;
   border-radius: 50%;
-  background: #00d4ff;
+  background: #7b96c9;
   border: none;
   box-shadow: 0 0 8px rgba(0,212,255,0.9);
 }
@@ -103,7 +104,7 @@
 
 @keyframes borderGlow {
   0%, 100% { box-shadow: 0 0 6px rgba(0,212,255,0.15), inset 0 0 6px rgba(0,212,255,0.04); }
-  50%       { box-shadow: 0 0 18px rgba(0,212,255,0.35), inset 0 0 12px rgba(0,212,255,0.08); }
+  50%       { box-shadow: 0 0 10px rgba(123,150,201,0.25), inset 0 0 8px rgba(123,150,201,0.06); }
 }
 .border-glow { animation: borderGlow 3s ease-in-out infinite; }
 

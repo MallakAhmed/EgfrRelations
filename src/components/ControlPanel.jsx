@@ -330,6 +330,11 @@ export default function ControlPanel({
           onChange={set('totalCholesterol')}
         />
 
+        <SliderRow
+          label="Hemoglobin" value={data.hemoglobin} min={7} max={18} step={0.1} unit="g/dL"
+          onChange={set('hemoglobin')}
+        />
+
         <div className="mb-3.5">
           <span className="text-[11px] text-slate-400 font-medium uppercase tracking-wider block mb-1.5">DMI Episode</span>
           <div className="flex gap-2">

@@ -165,9 +165,9 @@ export function generateInsight({ egfr, creatinine, urineOutput, map, potassium,
 }
 
 export const PRESETS = {
-  normal:      { label: 'Normal',         age: 45, gender: 'male',   creatinine: 1.0,  map: 88,  potassium: 4.2, urineOutput: 1600, weight: 70, bmi: 25, hdlCholesterol: 52, totalCholesterol: 182, dmiEpisode: 0, hypertension: 0, diabetes: 0 },
-  dehydration: { label: 'Dehydration',    age: 55, gender: 'male',   creatinine: 1.9,  map: 78,  potassium: 4.8, urineOutput: 550,  weight: 68, bmi: 27, hdlCholesterol: 46, totalCholesterol: 198, dmiEpisode: 1, hypertension: 1, diabetes: 0 },
-  aki:         { label: 'AKI Event',      age: 62, gender: 'female', creatinine: 3.8,  map: 85,  potassium: 5.7, urineOutput: 280,  weight: 65, bmi: 31, hdlCholesterol: 40, totalCholesterol: 215, dmiEpisode: 1, hypertension: 1, diabetes: 1 },
-  hypertension:{ label: 'Hypertension',   age: 58, gender: 'male',   creatinine: 1.7,  map: 122, potassium: 4.9, urineOutput: 1100, weight: 82, bmi: 32, hdlCholesterol: 42, totalCholesterol: 225, dmiEpisode: 0, hypertension: 1, diabetes: 1 },
-  dialysis:    { label: 'Dialysis State', age: 67, gender: 'female', creatinine: 9.2,  map: 88,  potassium: 5.9, urineOutput: 120,  weight: 60, bmi: 29, hdlCholesterol: 38, totalCholesterol: 210, dmiEpisode: 1, hypertension: 1, diabetes: 1 },
+  normal:      { label: 'Normal',         age: 45, gender: 'male',   creatinine: 1.0,  map: 88,  potassium: 4.2, urineOutput: 1600, weight: 70, bmi: 25, hdlCholesterol: 52, totalCholesterol: 182, hemoglobin: 13.8, dmiEpisode: 0, hypertension: 0, diabetes: 0 },
+  dehydration: { label: 'Dehydration',    age: 55, gender: 'male',   creatinine: 1.9,  map: 78,  potassium: 4.8, urineOutput: 550,  weight: 68, bmi: 27, hdlCholesterol: 46, totalCholesterol: 198, hemoglobin: 12.6, dmiEpisode: 1, hypertension: 1, diabetes: 0 },
+  aki:         { label: 'AKI Event',      age: 62, gender: 'female', creatinine: 3.8,  map: 85,  potassium: 5.7, urineOutput: 280,  weight: 65, bmi: 31, hdlCholesterol: 40, totalCholesterol: 215, hemoglobin: 10.5, dmiEpisode: 1, hypertension: 1, diabetes: 1 },
+  hypertension:{ label: 'Hypertension',   age: 58, gender: 'male',   creatinine: 1.7,  map: 122, potassium: 4.9, urineOutput: 1100, weight: 82, bmi: 32, hdlCholesterol: 42, totalCholesterol: 225, hemoglobin: 12.1, dmiEpisode: 0, hypertension: 1, diabetes: 1 },
+  dialysis:    { label: 'Dialysis State', age: 67, gender: 'female', creatinine: 9.2,  map: 88,  potassium: 5.9, urineOutput: 120,  weight: 60, bmi: 29, hdlCholesterol: 38, totalCholesterol: 210, hemoglobin: 9.2, dmiEpisode: 1, hypertension: 1, diabetes: 1 },
 };

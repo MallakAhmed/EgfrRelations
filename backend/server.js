@@ -71,38 +71,52 @@ function toNumericGender(gender) {
   return gender === 'female' ? 1 : 0;
 }
 
+function sigmoid(x) {
+  return 1 / (1 + Math.exp(-x));
+}
+
 function predictEgfr(features) {
   const age = Number(features.age ?? 45);
   const female = toNumericGender(features.gender);
   const bmi = Number(features.bmi ?? 27);
   const hdl = Number(features.hdlCholesterol ?? 50);
   const tc = Number(features.totalCholesterol ?? 185);
+  const hb = Number(features.hemoglobin ?? 13.4);
+  const creatinine = Number(features.creatinine ?? 1.0);
   const dmiEpisode = normalizeBinary(features.dmiEpisode);
   const hypertension = normalizeBinary(features.hypertension);
   const diabetes = normalizeBinary(features.diabetes);
 
-  let egfr = 126
+  let egfr = 122
     - (0.62 * age)
-    + (2.2 * female)
+    + (2.0 * female)
     - (0.45 * (bmi - 25))
-    + (0.28 * (hdl - 50))
-    - (0.35 * ((tc - 180) / 10))
-    - (8.0 * diabetes)
-    - (6.0 * hypertension)
+    + (0.23 * (hdl - 50))
+    - (0.30 * ((tc - 180) / 10))
+    + (0.85 * (hb - 13))
+    - (12.0 * (creatinine - 1))
+    - (7.5 * diabetes)
+    - (5.5 * hypertension)
     - (4.0 * dmiEpisode)
-    - (3.5 * diabetes * hypertension);
+    - (3.2 * diabetes * hypertension)
+    - (0.14 * bmi * diabetes)
+    - (0.02 * age * hypertension)
+    - (0.010 * tc * hypertension)
+    + (0.22 * creatinine * hb);
 
   egfr = Math.max(5, Math.min(130, egfr));
 
   const effects = [
     { feature: 'age', effectPerUnit: -0.62, unit: 'year' },
-    { feature: 'gender', effectPerUnit: 2.2, unit: 'female-vs-male baseline offset' },
+    { feature: 'gender', effectPerUnit: 2.0, unit: 'female-vs-male baseline offset' },
     { feature: 'bmi', effectPerUnit: -0.45, unit: 'kg/m²' },
-    { feature: 'hdlCholesterol', effectPerUnit: 0.28, unit: 'mg/dL' },
-    { feature: 'totalCholesterol', effectPerUnit: -0.035, unit: 'mg/dL' },
+    { feature: 'hdlCholesterol', effectPerUnit: 0.23, unit: 'mg/dL' },
+    { feature: 'totalCholesterol', effectPerUnit: -0.03, unit: 'mg/dL' },
+    { feature: 'hemoglobin', effectPerUnit: 0.85, unit: 'g/dL' },
+    { feature: 'creatinine', effectPerUnit: -12.0, unit: 'mg/dL' },
     { feature: 'dmiEpisode', effectPerUnit: -4.0, unit: 'episode flag' },
-    { feature: 'hypertension', effectPerUnit: -6.0, unit: 'disease flag' },
-    { feature: 'diabetes', effectPerUnit: -8.0, unit: 'disease flag' },
+    { feature: 'hypertension', effectPerUnit: -5.5, unit: 'disease flag' },
+    { feature: 'diabetes', effectPerUnit: -7.5, unit: 'disease flag' },
   ];
 
   return {
@@ -110,6 +124,46 @@ function predictEgfr(features) {
     equation:
       'eGFR = 126 -0.62*age +2.2*female -0.45*(BMI-25) +0.28*(HDL-50) -0.35*((TC-180)/10) -8*diabetes -6*hypertension -4*dmiEpisode -3.5*(diabetes*hypertension)',
     effects,
+  };
+}
+
+function propagateNetwork(features) {
+  const age = Number(features.age ?? 45);
+  const female = toNumericGender(features.gender);
+  const bmi = Number(features.bmi ?? 27);
+  const cholesterol = Number(features.totalCholesterol ?? 185);
+  const hdl = Number(features.hdlCholesterol ?? 50);
+  const dm = normalizeBinary(features.diabetes);
+  const htn = normalizeBinary(features.hypertension);
+  const creatinine = Number(features.creatinine ?? 1.0);
+  const hemoglobin = Number(features.hemoglobin ?? 13.4);
+
+  const pDM = sigmoid(-8.2 + 0.11 * age + 0.17 * bmi + 0.9 * htn);
+  const pHTN = sigmoid(-10.5 + 0.12 * age + 0.15 * bmi + 0.025 * cholesterol + 0.85 * dm);
+  const expectedCreatinine = Math.max(0.5, 0.58 + 0.011 * age + 0.06 * (1 - female) + 0.014 * (bmi - 25) + 0.34 * dm + 0.26 * htn);
+  const expectedHemoglobin = Math.max(8, 14.8 - 0.05 * age - 0.55 * dm - 0.35 * htn - 1.2 * Math.max(0, creatinine - 1));
+  const expectedHDL = Math.max(25, 57 - 0.62 * (bmi - 25) - 4.2 * dm + 3.2 * female);
+  const expectedChol = Math.max(120, 172 + 0.58 * age + 1.3 * (bmi - 25) - 0.2 * hdl);
+  const expectedEgfr = predictEgfr({
+    ...features,
+    creatinine: expectedCreatinine,
+    hemoglobin: expectedHemoglobin,
+    hdlCholesterol: expectedHDL,
+    totalCholesterol: expectedChol,
+  }).predictedEgfr;
+
+  return {
+    probabilities: {
+      diabetes: Number(pDM.toFixed(4)),
+      hypertension: Number(pHTN.toFixed(4)),
+    },
+    expected: {
+      creatinine: Number(expectedCreatinine.toFixed(3)),
+      hemoglobin: Number(expectedHemoglobin.toFixed(3)),
+      hdlCholesterol: Number(expectedHDL.toFixed(3)),
+      totalCholesterol: Number(expectedChol.toFixed(3)),
+      egfr: Number(expectedEgfr.toFixed(3)),
+    },
   };
 }
 
@@ -214,6 +268,7 @@ app.post('/api/simulation', (req, res) => {
   const pairwise = buildPairwiseTable();
   const bayesianNetwork = buildBayesianNetwork(features);
   const trends = buildTrendSeries(features);
+  const propagation = propagateNetwork(features);
 
   res.json({
     features: FEATURES,
@@ -221,6 +276,7 @@ app.post('/api/simulation', (req, res) => {
     pairwise,
     bayesianNetwork,
     trends,
+    propagation,
     equationsFromPapers: [
       {
         id: 'CKD-EPI-2021',
