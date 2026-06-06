@@ -3,7 +3,10 @@ import {
   LineChart, Line, XAxis, YAxis, Tooltip,
   ResponsiveContainer, ReferenceLine,
 } from 'recharts';
+
 import KidneyVisualization from './KidneyVisualization.jsx';
+import TrendCharts, { FutureTrendCharts, CIChart } from './TrendCharts.jsx';
+import { calculateEGFR } from '../utils/egfrCalculation.js';
 
 /* ── Animated counter ────────────────────────────── */
 function AnimatedNumber({ value, decimals = 0 }) {
@@ -56,9 +59,16 @@ function StagePill({ ckdStage }) {
 }
 
 /* ── Main ────────────────────────────────────────── */
-export default function MainVisualization({ results, history, beforeEGFR, patientData }) {
+export default function MainVisualization({ results, history, beforeEGFR, patientData, futurePredictions }) {
   const { egfr, ckdStage, insight } = results;
   const color = ckdStage.gaugeColor;
+  const [showCurrentTrends, setShowCurrentTrends] = useState(false);
+  const [showFutureTrends,  setShowFutureTrends]  = useState(false);
+  const [showCI,            setShowCI]            = useState(false);
+
+  const currentEgfr = calculateEGFR({
+    ...patientData, map: 88, potassium: 4.2, urineOutput: 1600, weight: patientData.weight ?? 70,
+  });
 
   // Build chart data from history
   const chartData = history.length < 2
@@ -70,6 +80,47 @@ export default function MainVisualization({ results, history, beforeEGFR, patien
       className="flex-1 flex flex-col overflow-hidden grid-bg"
       style={{ background: 'radial-gradient(ellipse at 50% 0%, #0a1628 0%, #030812 70%)' }}
     >
+      {/* Modal: Current eGFR Trend Charts */}
+      {showCurrentTrends && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60"
+          onClick={() => setShowCurrentTrends(false)}>
+          <div className="bg-white rounded-lg shadow-xl p-6 max-w-3xl w-full relative max-h-[90vh] overflow-y-auto"
+            onClick={e => e.stopPropagation()}>
+            <button className="absolute top-3 right-3 text-slate-400 hover:text-red-500 text-xl font-bold leading-none"
+              onClick={() => setShowCurrentTrends(false)}>×</button>
+            <h2 className="text-lg font-bold mb-5 text-cyan-700">eGFR Trend Charts</h2>
+            <TrendCharts patientData={patientData} />
+          </div>
+        </div>
+      )}
+
+      {/* Modal: Future eGFR Trend Charts */}
+      {showFutureTrends && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60"
+          onClick={() => setShowFutureTrends(false)}>
+          <div className="bg-white rounded-lg shadow-xl p-6 max-w-3xl w-full relative max-h-[90vh] overflow-y-auto"
+            onClick={e => e.stopPropagation()}>
+            <button className="absolute top-3 right-3 text-slate-400 hover:text-red-500 text-xl font-bold leading-none"
+              onClick={() => setShowFutureTrends(false)}>×</button>
+            <h2 className="text-lg font-bold mb-5 text-cyan-700">Future eGFR Trend Charts</h2>
+            <FutureTrendCharts patientData={patientData} />
+          </div>
+        </div>
+      )}
+
+      {/* Modal: Confidence Interval */}
+      {showCI && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60"
+          onClick={() => setShowCI(false)}>
+          <div className="bg-white rounded-lg shadow-xl p-6 max-w-3xl w-full relative max-h-[90vh] overflow-y-auto"
+            onClick={e => e.stopPropagation()}>
+            <button className="absolute top-3 right-3 text-slate-400 hover:text-red-500 text-xl font-bold leading-none"
+              onClick={() => setShowCI(false)}>×</button>
+            <h2 className="text-lg font-bold mb-5 text-cyan-700">Confidence Interval</h2>
+            <CIChart futurePredictions={futurePredictions} currentEgfr={currentEgfr} />
+          </div>
+        </div>
+      )}
       {/* Top bar */}
       <div className="px-5 py-3 border-b border-cyan-500/10 flex items-center justify-between flex-shrink-0">
         <div>
@@ -77,6 +128,26 @@ export default function MainVisualization({ results, history, beforeEGFR, patien
             Kidney_Twin_V2
           </p>
           <p className="text-[10px] text-slate-500 mt-0.5">Active Synthetic Model</p>
+          <div className="flex justify-center gap-2 mt-1">
+            <button
+              className="px-3 py-1 rounded bg-cyan-600 text-white text-xs font-semibold shadow hover:bg-cyan-700 transition"
+              onClick={() => setShowCurrentTrends(true)}
+            >
+              Trend Charts
+            </button>
+            <button
+              className="px-3 py-1 rounded bg-indigo-600 text-white text-xs font-semibold shadow hover:bg-indigo-700 transition"
+              onClick={() => setShowFutureTrends(true)}
+            >
+              Future Trends
+            </button>
+            <button
+              className="px-3 py-1 rounded bg-violet-600 text-white text-xs font-semibold shadow hover:bg-violet-700 transition"
+              onClick={() => setShowCI(true)}
+            >
+              CI
+            </button>
+          </div>
         </div>
         <div className="flex items-center gap-4">
           {[

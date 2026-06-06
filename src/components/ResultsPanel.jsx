@@ -1,6 +1,16 @@
 import React, { useState } from 'react';
+// --- Equation explanations ---
+const equationExplanations = {
+  'ckd-epi-2009': 'CKD-EPI 2009: Widely used, more accurate than MDRD for higher GFR. Considers age, sex, race, and creatinine. Developed for adults. Reference: Levey et al. 2009.',
+  'mdrd-4': 'MDRD 4-variable: Older equation, less accurate at higher GFR. Uses age, sex, race, and creatinine. Reference: Levey et al. 2006.',
+  'jpn-eq1': 'Japanese Eq1 (old): Adapted for Japanese population, based on MDRD. Reference: Matsuo et al.',
+  'jpn-eq2': 'Japanese Eq2 (JSN-CKDI): Japanese Society of Nephrology recommended, improved accuracy. Reference: Matsuo et al.',
+  'jpn-eq3': 'Japanese Eq3 (new): Newer Japanese equation, further refined for local population. Reference: Matsuo et al.',
+  'jpn-eq4': 'Japanese Eq4 (3-var): Japanese equation using 3 variables, for specific clinical use. Reference: Matsuo et al.',
+};
 import { AlertTriangle, AlertCircle, CheckCircle, Download, GitBranch, ChevronDown, ChevronUp } from 'lucide-react';
 import { CLINICAL_REFERENCES, INFLUENCE_MAP } from '../utils/clinicalRelationships.js';
+import { getCKDStage } from '../utils/egfrCalculation.js';
 import {
   BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Cell,
   LineChart, Line, CartesianGrid,
@@ -170,9 +180,162 @@ const BarTip = ({ active, payload }) => {
   );
 };
 
+/* ── Future eGFR Forecast ────────────────────────── */
+function FutureEGFRForecast({ currentEgfr, futurePredictions }) {
+  const {
+    egfr180, egfr180Lower, egfr180Upper, sigma180,
+    egfr360, egfr360Lower, egfr360Upper, sigma360,
+    loading,
+  } = futurePredictions ?? {};
+
+  const points = [
+    { label: 'Now',      egfr: currentEgfr, lower: null,        upper: null,        stage: getCKDStage(currentEgfr) },
+    { label: '180 days', egfr: egfr180,     lower: egfr180Lower, upper: egfr180Upper, stage: egfr180 != null ? getCKDStage(egfr180) : null },
+    { label: '360 days', egfr: egfr360,     lower: egfr360Lower, upper: egfr360Upper, stage: egfr360 != null ? getCKDStage(egfr360) : null },
+  ];
+
+  const known   = points.filter(p => p.egfr != null);
+  const allVals = known.flatMap(p => [p.egfr, p.lower, p.upper].filter(v => v != null));
+  const minEgfr = Math.max(0,   Math.min(...allVals) - 8);
+  const maxEgfr = Math.min(120, Math.max(...allVals) + 8);
+  const range   = maxEgfr - minEgfr || 1;
+  const toY     = v => 56 - ((v - minEgfr) / range) * 50;
+  const XS      = [14, 110, 206];
+
+  return (
+    <div className="px-3 pt-3">
+      <div className="glass-card rounded-xl p-3 border-glow">
+        <div className="flex items-center justify-between mb-2">
+          <p className="text-[9px] text-slate-500 uppercase tracking-widest">Future eGFR Forecast</p>
+          <p className="text-[8px] text-slate-600 italic">
+            {sigma180 != null ? `σ₁₈₀≈${sigma180.toFixed(1)} · σ₃₆₀≈${sigma360?.toFixed(1)}` : 'Stacking · R²≈0.90'}
+          </p>
+        </div>
+
+        {loading && (
+          <p className="text-[10px] text-cyan-400/60 text-center py-2 animate-pulse">Computing…</p>
+        )}
+
+        {!loading && (
+          <>
+            {/* SVG trajectory + CI bands */}
+            <svg viewBox="0 0 220 68" className="w-full mb-2">
+              <defs>
+                <linearGradient id="trajGrad" x1="0" x2="1" y1="0" y2="0">
+                  <stop offset="0%"   stopColor="#00d4ff" stopOpacity="0.9" />
+                  <stop offset="100%" stopColor="#ef4444" stopOpacity="0.9" />
+                </linearGradient>
+              </defs>
+
+              {/* Grid lines */}
+              {[0, 30, 60, 90, 120].map(v => {
+                const y = toY(v);
+                if (y < 2 || y > 62) return null;
+                return <line key={v} x1="10" x2="210" y1={y} y2={y}
+                  stroke="#1e293b" strokeWidth="0.5" strokeDasharray="3 3" />;
+              })}
+
+              {/* CI shaded areas for 180d and 360d */}
+              {[1, 2].map(i => {
+                const p = points[i];
+                if (p.egfr == null || p.lower == null) return null;
+                const x  = XS[i];
+                const yM = toY(p.egfr);
+                const yL = toY(p.lower);
+                const yU = toY(p.upper);
+                const col = p.stage?.gaugeColor ?? '#64748b';
+                return (
+                  <g key={i}>
+                    <rect x={x - 8} y={yU} width={16} height={yL - yU}
+                      fill={col} fillOpacity={0.15} rx={2} />
+                    <line x1={x - 8} x2={x + 8} y1={yU} y2={yU}
+                      stroke={col} strokeWidth={1} strokeOpacity={0.5} />
+                    <line x1={x - 8} x2={x + 8} y1={yL} y2={yL}
+                      stroke={col} strokeWidth={1} strokeOpacity={0.5} />
+                    <line x1={x} x2={x} y1={yU} y2={yM - 4}
+                      stroke={col} strokeWidth={0.8} strokeOpacity={0.4} strokeDasharray="2 2" />
+                    <line x1={x} x2={x} y1={yM + 4} y2={yL}
+                      stroke={col} strokeWidth={0.8} strokeOpacity={0.4} strokeDasharray="2 2" />
+                  </g>
+                );
+              })}
+
+              {/* Trajectory path */}
+              {known.length >= 2 && (() => {
+                const pts = known.map((p, i) => `${XS[i]},${toY(p.egfr)}`);
+                return <polyline points={pts.join(' ')} fill="none"
+                  stroke="url(#trajGrad)" strokeWidth="1.5"
+                  strokeLinecap="round" strokeLinejoin="round" />;
+              })()}
+
+              {/* Data points + labels */}
+              {points.map((p, i) => {
+                if (p.egfr == null) return null;
+                const x   = XS[i];
+                const y   = toY(p.egfr);
+                const col = p.stage?.gaugeColor ?? '#64748b';
+                return (
+                  <g key={i}>
+                    <circle cx={x} cy={y} r="4" fill={col} opacity="0.9" />
+                    <text x={x} y={y - 7} textAnchor="middle" fill={col}
+                      fontSize="7" fontFamily="Orbitron, sans-serif" fontWeight="700">
+                      {Math.round(p.egfr)}
+                    </text>
+                  </g>
+                );
+              })}
+            </svg>
+
+            {/* Cards row */}
+            <div className="grid grid-cols-3 gap-1.5">
+              {points.map((p, i) => {
+                const col   = p.stage?.gaugeColor ?? '#64748b';
+                const label = p.stage?.shortLabel ?? '—';
+                return (
+                  <div key={i} className="rounded-lg p-2 text-center"
+                    style={{ background: col + '12', border: `1px solid ${col}30` }}>
+                    <p className="text-[8px] text-slate-500 mb-0.5">{p.label}</p>
+                    {p.egfr != null ? (
+                      <>
+                        <p className="font-orbitron text-sm font-bold" style={{ color: col }}>
+                          {Math.round(p.egfr)}
+                        </p>
+                        <p className="text-[8px] mt-0.5" style={{ color: col + 'bb' }}>{label}</p>
+                        {p.lower != null && (
+                          <p className="text-[7px] text-slate-600 mt-0.5">
+                            [{Math.round(p.lower)}–{Math.round(p.upper)}]
+                          </p>
+                        )}
+                      </>
+                    ) : (
+                      <p className="text-[10px] text-slate-600 mt-1">—</p>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+
+            {egfr180 == null && (
+              <p className="text-[9px] text-slate-600 text-center mt-1 italic">
+                Start backend to enable future predictions
+              </p>
+            )}
+          </>
+        )}
+      </div>
+    </div>
+  );
+}
+
 /* ── Main ────────────────────────────────────────── */
-export default function ResultsPanel({ results, patientData, relationshipData }) {
-  const { egfr, ckdStage, risks, consistency = [] } = results;
+export default function ResultsPanel({ results, patientData, relationshipData, egfrEquationKey, setEgfrEquationKey, futurePredictions }) {
+  const { egfr, ckdStage, risks, consistency = [], allEgfrResults } = results;
+  // Equation selection UI
+  const handleEquationChange = (e) => setEgfrEquationKey(e.target.value);
+  // Modal state for equation explanation
+  const [explanationKey, setExplanationKey] = useState(null);
+  const handleShowExplanation = (key) => setExplanationKey(key);
+  const handleCloseExplanation = () => setExplanationKey(null);
   const [showRefs,      setShowRefs]      = useState(false);
   const [showInfluence, setShowInfluence] = useState(false);
   const [showRelationships, setShowRelationships] = useState(true);
@@ -225,7 +388,80 @@ export default function ResultsPanel({ results, patientData, relationshipData })
         </button>
       </div>
 
+
+      {/* Equation selection and comparative report */}
+      <div className="px-3 pt-3">
+        <div className="glass-card rounded-xl p-2 border-glow mb-3">
+          <label className="block text-[10px] text-slate-400 uppercase font-bold mb-1">eGFR Equation</label>
+          <div className="flex items-center gap-2">
+            <select
+              value={egfrEquationKey}
+              onChange={handleEquationChange}
+              className="flex-1 bg-slate-800/80 border border-cyan-500/20 rounded-lg px-2 py-1 text-xs text-cyan-300 font-semibold focus:outline-none focus:border-cyan-400/60"
+            >
+              {allEgfrResults?.map(eq => (
+                <option key={eq.key} value={eq.key}>{eq.label}</option>
+              ))}
+            </select>
+            <button
+              className="ml-1 px-2 py-1 text-xs text-cyan-400 hover:text-cyan-200 focus:outline-none border border-cyan-500/20 rounded"
+              onClick={() => handleShowExplanation(egfrEquationKey)}
+              type="button"
+              aria-label={`Explain ${allEgfrResults?.find(eq => eq.key === egfrEquationKey)?.label}`}
+            >
+              ℹ️
+            </button>
+          </div>
+        </div>
+      {/* Equation explanation modal */}
+      {explanationKey && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40">
+          <div className="bg-slate-900 rounded-xl p-6 max-w-xs w-full border border-cyan-500/30 shadow-lg relative">
+            <div className="text-cyan-300 font-bold mb-2">{allEgfrResults?.find(eq => eq.key === explanationKey)?.label}</div>
+            <div className="text-slate-200 text-sm mb-4">{equationExplanations[explanationKey]}</div>
+            <button
+              className="absolute top-2 right-2 text-slate-400 hover:text-cyan-300 text-lg font-bold"
+              onClick={handleCloseExplanation}
+              aria-label="Close explanation"
+            >
+              ×
+            </button>
+            <button
+              className="mt-2 w-full bg-cyan-700/80 hover:bg-cyan-600 text-white rounded-lg py-1 font-semibold"
+              onClick={handleCloseExplanation}
+            >Close</button>
+          </div>
+        </div>
+      )}
+
+        {/* Comparative table */}
+        <div className="glass-card rounded-xl p-2 border-glow">
+          <div className="text-[10px] text-slate-400 uppercase font-bold mb-2">eGFR Results (All Equations)</div>
+          <table className="w-full text-[11px] text-slate-300">
+            <thead>
+              <tr className="border-b border-cyan-500/10">
+                <th className="text-left font-semibold">Equation</th>
+                <th className="text-right font-semibold">eGFR</th>
+                <th className="text-left font-normal">Reference</th>
+              </tr>
+            </thead>
+            <tbody>
+              {allEgfrResults?.map(eq => (
+                <tr key={eq.key} className={eq.key === egfrEquationKey ? 'bg-cyan-500/10 font-bold' : ''}>
+                  <td>{eq.label}</td>
+                  <td className="text-right">{Math.round(eq.value)}</td>
+                  <td className="text-slate-400">{eq.reference}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </div>
+
       <div className="flex-1 overflow-y-auto">
+
+        {/* Future eGFR forecast */}
+        <FutureEGFRForecast currentEgfr={egfr} futurePredictions={futurePredictions} />
 
         {/* eGFR gauge */}
         <div className="px-3 pt-3">

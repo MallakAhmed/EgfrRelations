@@ -1,0 +1,1143 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>eGFR Clinical Causal Network</title>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/cytoscape/3.28.1/cytoscape.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/dagre/0.8.5/dagre.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/cytoscape-dagre@2.5.0/cytoscape-dagre.js"></script>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      background: #0f1117;
+      color: #e2e8f0;
+      font-family: 'Segoe UI', system-ui, sans-serif;
+      height: 100vh;
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+    }
+
+    header {
+      background: linear-gradient(135deg, #1a1f2e 0%, #0f1117 100%);
+      border-bottom: 1px solid #2d3748;
+      padding: 12px 20px;
+      display: flex;
+      align-items: center;
+      gap: 16px;
+      flex-shrink: 0;
+    }
+    header h1 { font-size: 18px; font-weight: 700; color: #fff; }
+    header p  { font-size: 12px; color: #718096; }
+    .badge {
+      background: #2d3748;
+      border: 1px solid #4a5568;
+      border-radius: 20px;
+      padding: 4px 12px;
+      font-size: 11px;
+      color: #a0aec0;
+    }
+
+    .main { display: flex; flex: 1; overflow: hidden; }
+
+    /* ── Sidebar ── */
+    .sidebar {
+      width: 300px;
+      background: #141720;
+      border-right: 1px solid #2d3748;
+      overflow-y: auto;
+      flex-shrink: 0;
+      padding: 16px;
+      display: flex;
+      flex-direction: column;
+      gap: 18px;
+    }
+
+    .section-title {
+      font-size: 11px;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      color: #718096;
+      margin-bottom: 8px;
+    }
+
+    .legend-item {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      margin-bottom: 7px;
+      font-size: 12px;
+      color: #cbd5e0;
+    }
+    .legend-dot  { width: 14px; height: 14px; border-radius: 50%; flex-shrink: 0; }
+    .legend-line { width: 28px; height: 3px; border-radius: 2px; flex-shrink: 0; }
+
+    /* Info panel */
+    #info-panel {
+      background: #1a1f2e;
+      border: 1px solid #2d3748;
+      border-radius: 8px;
+      padding: 12px;
+      font-size: 12px;
+      line-height: 1.6;
+      color: #a0aec0;
+      min-height: 80px;
+    }
+    #info-panel strong { color: #e2e8f0; }
+
+    /* Molecular layer box */
+    .mol-box {
+      background: #0d1117;
+      border: 1px solid #2d4a6e;
+      border-radius: 6px;
+      padding: 10px;
+      margin-top: 10px;
+      font-size: 11px;
+    }
+    .mol-box .mol-title {
+      font-size: 10px;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.07em;
+      margin-bottom: 6px;
+    }
+    .mol-box.kegg  { border-color: #2d6a4f; }
+    .mol-box.kegg .mol-title { color: #52b788; }
+    .mol-box.go    { border-color: #4a3d6e; }
+    .mol-box.go .mol-title { color: #9b72cf; }
+
+    .mol-tag {
+      display: inline-block;
+      border-radius: 4px;
+      padding: 2px 8px;
+      margin: 2px 3px 2px 0;
+      font-size: 11px;
+      font-weight: 600;
+      cursor: pointer;
+      text-decoration: none;
+    }
+    .mol-tag.kegg-tag {
+      background: #1a3a2e;
+      color: #74c69d;
+      border: 1px solid #2d6a4f;
+    }
+    .mol-tag.kegg-tag:hover { background: #2d6a4f; }
+    .mol-tag.go-tag {
+      background: #2a1f40;
+      color: #c77dff;
+      border: 1px solid #4a3d6e;
+    }
+    .mol-tag.go-tag:hover { background: #4a3d6e; }
+
+    .ref-line { color: #4299e1; font-style: italic; margin-top: 6px; font-size: 11px; }
+
+    /* Controls */
+    .controls { display: flex; flex-direction: column; gap: 7px; }
+    .btn {
+      background: #2d3748;
+      border: 1px solid #4a5568;
+      border-radius: 6px;
+      color: #e2e8f0;
+      font-size: 12px;
+      padding: 8px 12px;
+      cursor: pointer;
+      transition: background 0.15s;
+      text-align: left;
+    }
+    .btn:hover { background: #4a5568; }
+    .btn.active { background: #2b4c7e; border-color: #4299e1; color: #90cdf4; }
+
+    /* References */
+    .ref-list { display: flex; flex-direction: column; gap: 5px; }
+    .ref-item {
+      background: #1a1f2e;
+      border: 1px solid #2d3748;
+      border-radius: 6px;
+      padding: 7px;
+      font-size: 10.5px;
+      color: #718096;
+      line-height: 1.5;
+    }
+    .ref-item .ref-id { color: #4299e1; font-weight: 700; }
+
+    #cy { flex: 1; height: 100%; background: #0f1117; }
+
+    /* Tooltip */
+    #tooltip {
+      position: fixed;
+      background: #1a1f2e;
+      border: 1px solid #4a5568;
+      border-radius: 8px;
+      padding: 10px 14px;
+      font-size: 12px;
+      color: #e2e8f0;
+      pointer-events: none;
+      display: none;
+      z-index: 1000;
+      max-width: 260px;
+      line-height: 1.6;
+      box-shadow: 0 4px 20px rgba(0,0,0,0.5);
+    }
+    #tooltip .t-title { font-weight: 700; margin-bottom: 2px; }
+    #tooltip .t-ref   { color: #4299e1; font-size: 10px; margin-top: 3px; }
+  </style>
+</head>
+<body>
+
+<header>
+  <div>
+    <h1>eGFR Clinical Causal Network</h1>
+    <p>Directed Acyclic Graph — 15 nodes · 35 edges · Clinical + Molecular layers</p>
+  </div>
+  <span class="badge">Bayesian Propagation</span>
+  <span class="badge">CKD-EPI 2021</span>
+  <span class="badge">KEGG Pathways</span>
+  <span class="badge">Gene Ontology</span>
+</header>
+
+<div class="main">
+
+  <div class="sidebar">
+
+    <div>
+      <div class="section-title">Node Categories</div>
+      <div class="legend-item"><div class="legend-dot" style="background:#4A90E2"></div>Demographics</div>
+      <div class="legend-item"><div class="legend-dot" style="background:#F5A623"></div>Metabolic</div>
+      <div class="legend-item"><div class="legend-dot" style="background:#9B59B6"></div>Lipids</div>
+      <div class="legend-item"><div class="legend-dot" style="background:#E74C3C"></div>Disease</div>
+      <div class="legend-item"><div class="legend-dot" style="background:#27AE60"></div>Physiological</div>
+      <div class="legend-item"><div class="legend-dot" style="background:#F1C40F"></div>Outcome (eGFR)</div>
+    </div>
+
+    <div>
+      <div class="section-title">Edge Direction</div>
+      <div class="legend-item"><div class="legend-line" style="background:#FC8181"></div>Increases / Worsens</div>
+      <div class="legend-item"><div class="legend-line" style="background:#63B3ED"></div>Decreases / Protects</div>
+      <div class="legend-item"><div class="legend-line" style="background:#A0AEC0"></div>Contextual / Mixed</div>
+      <div style="font-size:11px;color:#718096;margin-top:4px;">Edge width = relationship strength</div>
+    </div>
+
+    <div>
+      <div class="section-title">Selected Element</div>
+      <div id="info-panel">Click any node or edge.<br/><span style="color:#52b788;font-size:11px;">Edges show KEGG pathways &amp; GO biological processes.</span></div>
+    </div>
+
+    <div>
+      <div class="section-title">Controls</div>
+      <div class="controls">
+        <button class="btn" onclick="resetView()">⟳ Reset Layout</button>
+        <button class="btn" onclick="highlightEgfrPath()">Highlight → eGFR Paths</button>
+        <button class="btn" onclick="showAll()">Show All</button>
+        <button class="btn" onclick="fitView()">Fit to Screen</button>
+      </div>
+    </div>
+
+    <div>
+      <div class="section-title">References</div>
+      <div class="ref-list">
+        <div class="ref-item"><span class="ref-id">R1</span> Inker LA et al. N Engl J Med. 2021;385:1737–1749 — CKD-EPI 2021 eGFR equation</div>
+        <div class="ref-item"><span class="ref-id">R2</span> KDIGO AKI Work Group. Kidney Int Suppl. 2012 — AKI staging, oliguria thresholds</div>
+        <div class="ref-item"><span class="ref-id">R3</span> Kovesdy CP et al. CJASN. 2012;7:861–867 — K⁺ homeostasis in CKD</div>
+        <div class="ref-item"><span class="ref-id">R4</span> Vasan RS et al. JAMA. 2002;287:1003–1010 — Age-related BP (Framingham)</div>
+        <div class="ref-item"><span class="ref-id">R5</span> Cockcroft &amp; Gault. Nephron. 1976;16:31–41 — Creatinine clearance</div>
+        <div class="ref-item"><span class="ref-id">R6</span> Carlström M et al. Nat Rev Nephrol. 2015;11:545–557 — Renal autoregulation</div>
+        <div class="ref-item"><span class="ref-id">R7</span> Levey AS et al. Ann Intern Med. 1999;130:461–470 — MDRD, muscle mass</div>
+        <div class="ref-item"><span class="ref-id">R8</span> Nelson RG et al. JAMA. 2019;322:2104–2114 — CKD risk equations</div>
+        <div class="ref-item"><span class="ref-id">R9</span> Sun D et al. Circ Res. 2019;124:930–937 — DM↔HTN causal direction</div>
+        <div class="ref-item"><span class="ref-id">R10</span> Project HeartBeat! Int J Obes. 2011;35:1144–1152 — BMI–lipid regressions</div>
+        <div class="ref-item"><span class="ref-id">R11</span> Kanda E et al. Sci Rep. 2019;9:5082 — Bayesian network for CKD</div>
+      </div>
+    </div>
+
+  </div>
+
+  <div id="cy"></div>
+</div>
+
+<div id="tooltip"></div>
+
+<script>
+cytoscape.use(cytoscapeDagre);
+
+const CAT_COLOR = {
+  demographic:   '#4A90E2',
+  metabolic:     '#F5A623',
+  lipid:         '#9B59B6',
+  disease:       '#E74C3C',
+  physiological: '#27AE60',
+  outcome:       '#F1C40F',
+};
+
+const EDGE_COLOR = {
+  positive:   '#FC8181',
+  negative:   '#63B3ED',
+  contextual: '#718096',
+};
+
+/* ─────────────────────────────────────────
+   NODES
+───────────────────────────────────────── */
+const nodes = [
+  { data:{ id:'age',         label:'Age',               category:'demographic',   unit:'years',         range:'20–85',   desc:'Chronological age. A root driver. Aging increases blood pressure, reduces kidney function (~1%/decade after 40), and raises the chance of developing diabetes and hypertension.' } },
+  { data:{ id:'gender',      label:'Gender',             category:'demographic',   unit:'M / F',         range:'—',       desc:'Biological sex. Females produce ~15% less creatinine than males due to lower average muscle mass. The CKD-EPI formula corrects for this.' } },
+  { data:{ id:'weight',      label:'Weight',             category:'demographic',   unit:'kg',            range:'40–120',  desc:'Body weight. Determines how much creatinine the body produces (muscle mass proxy) and sets the baseline for expected urine output (0.6 mL/kg/hr).' } },
+  { data:{ id:'bmi',         label:'BMI',                category:'metabolic',     unit:'kg/m²',         range:'18–42',   desc:'Body Mass Index = weight ÷ height². A measure of obesity. Obesity triggers insulin resistance (→ diabetes), raises blood pressure, worsens cholesterol, and directly strains the kidneys.' } },
+  { data:{ id:'dmiEpisode',  label:'DMI Episode',        category:'metabolic',     unit:'flag',          range:'Yes/No',  desc:'A serious diabetes-related acute event (e.g., diabetic coma, hospitalization). Each episode accelerates kidney damage on top of background diabetes.' } },
+  { data:{ id:'cholesterol', label:'Total Cholesterol',  category:'lipid',         unit:'mg/dL',         range:'130–280', desc:'A fat-like substance in blood. At high levels it builds up in artery walls (atherosclerosis), stiffening them and raising blood pressure. This slowly chokes off kidney blood supply.' } },
+  { data:{ id:'hdl',         label:'HDL Cholesterol',    category:'lipid',         unit:'mg/dL',         range:'30–80',   desc:'The "good" cholesterol. It removes excess cholesterol from artery walls. Higher HDL protects blood vessels including the kidney\'s delicate vessels. Obesity and diabetes suppress it.' } },
+  { data:{ id:'dm',          label:'Diabetes (DM)',       category:'disease',       unit:'flag',          range:'Yes/No',  desc:'Type 2 Diabetes: the body cannot control blood sugar. Chronically high sugar damages the tiny filters in the kidneys over years — called diabetic nephropathy. The leading cause of kidney failure worldwide.' } },
+  { data:{ id:'htn',         label:'Hypertension (HTN)', category:'disease',       unit:'flag',          range:'Yes/No',  desc:'Chronically high blood pressure. The force damages the small blood vessels entering the kidney\'s filters (afferent arterioles), scarring them. Second leading cause of kidney failure.' } },
+  { data:{ id:'map',         label:'MAP',                category:'physiological', unit:'mmHg',          range:'60–110',  desc:'Mean Arterial Pressure — the average pressure in your arteries. Kidneys self-regulate between 65–110 mmHg. Below 65: kidneys can\'t filter → urine stops. Above 110 chronically: vessels scar.' } },
+  { data:{ id:'creatinine',  label:'Creatinine',         category:'physiological', unit:'mg/dL',         range:'0.5–4.5', desc:'A waste product from muscle metabolism, normally filtered by kidneys. When kidneys fail, creatinine accumulates. It is the primary input to the eGFR formula — the strongest signal of kidney function.' } },
+  { data:{ id:'hemoglobin',  label:'Hemoglobin',         category:'physiological', unit:'g/dL',          range:'8–17',    desc:'The protein in red blood cells that carries oxygen. Kidneys produce EPO (a hormone) to stimulate red blood cell production. When kidneys fail, EPO drops → hemoglobin falls → anemia.' } },
+  { data:{ id:'potassium',   label:'Potassium K⁺',       category:'physiological', unit:'mEq/L',         range:'3.5–6.5', desc:'A mineral essential for heart rhythm. Kidneys excrete excess potassium. When eGFR drops, excretion fails → potassium accumulates → hyperkalemia → risk of fatal cardiac arrhythmia.' } },
+  { data:{ id:'urineOutput', label:'Urine Output',       category:'physiological', unit:'mL/day',        range:'200–3000',desc:'How much urine the kidneys produce per day. Depends on body weight, blood pressure, and eGFR. Dangerously low (<500 mL/day at normal weight) = oliguria — a sign of severe kidney failure or AKI.' } },
+  { data:{ id:'egfr',        label:'eGFR',               category:'outcome',       unit:'mL/min/1.73m²', range:'5–130',   desc:'Estimated Glomerular Filtration Rate — the speed of the kidney\'s filter. Calculated via CKD-EPI 2021 from creatinine, age, sex. CKD stages: ≥90 normal, 60–89 mild, 30–59 moderate, 15–29 severe, <15 failure.' } },
+];
+
+/* ─────────────────────────────────────────
+   EDGES  (clinical + molecular layer)
+
+   Each edge has:
+     direction, weight, label, detail, ref   ← clinical layer
+     kegg[]  — KEGG pathway IDs + names      ← molecular layer
+     go[]    — GO term IDs + names           ← molecular layer
+───────────────────────────────────────── */
+const edges = [
+
+  /* ── AGE ──────────────────────────────────────────────────────────────── */
+  {
+    data:{
+      id:'e01', source:'age', target:'map',
+      direction:'positive', weight:0.47, label:'+0.30 mmHg / yr',
+      detail:'Every year of life adds ~0.30 mmHg of MAP, driven by arterial wall stiffening and vascular remodeling. By age 70, a person\'s blood pressure is ~15 mmHg higher than at age 20, even with no disease.',
+      ref:'Vasan RS et al. JAMA. 2002 [R4]',
+      kegg:[
+        { id:'hsa04614', name:'Renin–angiotensin system' },
+        { id:'hsa04022', name:'cGMP–PKG signaling' },
+      ],
+      go:[
+        { id:'GO:0008217', name:'Regulation of blood pressure' },
+        { id:'GO:0001974', name:'Blood vessel remodeling' },
+        { id:'GO:0007568', name:'Ageing' },
+      ],
+    }
+  },
+  {
+    data:{
+      id:'e02', source:'age', target:'creatinine',
+      direction:'negative', weight:0.40, label:'↓ muscle mass (sarcopenia)',
+      detail:'As people age, muscles naturally waste away (sarcopenia). Less muscle = less creatinine produced. This means an elderly patient can have a "normal" creatinine reading while their kidneys are actually failing — a dangerous masking effect.',
+      ref:'Levey AS et al. Ann Intern Med. 1999 [R7]; Cockcroft & Gault 1976 [R5]',
+      kegg:[
+        { id:'hsa04218', name:'Cellular senescence' },
+        { id:'hsa04217', name:'Necroptosis (muscle atrophy pathway)' },
+      ],
+      go:[
+        { id:'GO:0007568', name:'Ageing' },
+        { id:'GO:0014706', name:'Striated muscle tissue development' },
+        { id:'GO:0006544', name:'Glycine metabolic process (creatine synthesis)' },
+      ],
+    }
+  },
+  {
+    data:{
+      id:'e03', source:'age', target:'bmi',
+      direction:'positive', weight:0.35, label:'+0.35',
+      detail:'Aging shifts body composition: fat increases, muscle decreases. BMI may stay the same or rise, but the metabolic risk goes up because the ratio of fat to muscle worsens.',
+      ref:'Aging & Body Composition studies',
+      kegg:[
+        { id:'hsa04218', name:'Cellular senescence' },
+        { id:'hsa04910', name:'Insulin signaling pathway' },
+      ],
+      go:[
+        { id:'GO:0007568', name:'Ageing' },
+        { id:'GO:0045598', name:'Regulation of fat cell differentiation' },
+      ],
+    }
+  },
+  {
+    data:{
+      id:'e04', source:'age', target:'dm',
+      direction:'positive', weight:0.52, label:'+0.52',
+      detail:'Diabetes prevalence rises sharply with age. About 25–30% of people over 65 have type 2 diabetes. Older cells become progressively more resistant to insulin.',
+      ref:'Global Diabetes Epidemiology; Sci Rep 2023',
+      kegg:[
+        { id:'hsa04930', name:'Type II diabetes mellitus' },
+        { id:'hsa04910', name:'Insulin signaling pathway' },
+      ],
+      go:[
+        { id:'GO:0007568', name:'Ageing' },
+        { id:'GO:0032869', name:'Cellular response to insulin stimulus' },
+        { id:'GO:0006006', name:'Glucose metabolic process' },
+      ],
+    }
+  },
+  {
+    data:{
+      id:'e05', source:'age', target:'htn',
+      direction:'positive', weight:0.62, label:'+0.62 (strongest age effect)',
+      detail:'Hypertension is almost universal in the elderly. Aging stiffens artery walls (they lose their elasticity), meaning the heart has to push harder to move blood — raising pressure. The Framingham Heart Study tracked this over decades.',
+      ref:'Vasan RS et al. JAMA. 2002 [R4]',
+      kegg:[
+        { id:'hsa04614', name:'Renin–angiotensin system' },
+        { id:'hsa04022', name:'cGMP–PKG signaling' },
+      ],
+      go:[
+        { id:'GO:0007568', name:'Ageing' },
+        { id:'GO:0008217', name:'Regulation of blood pressure' },
+        { id:'GO:0001974', name:'Blood vessel remodeling' },
+      ],
+    }
+  },
+  {
+    data:{
+      id:'e06', source:'age', target:'cholesterol',
+      direction:'positive', weight:0.31, label:'+0.31',
+      detail:'Total cholesterol tends to rise with age as the liver\'s ability to clear LDL (bad cholesterol) from the blood gradually declines.',
+      ref:'Nelson RG et al. JAMA. 2019 [R8]',
+      kegg:[
+        { id:'hsa01212', name:'Fatty acid metabolism' },
+        { id:'hsa04979', name:'Cholesterol metabolism' },
+      ],
+      go:[
+        { id:'GO:0007568', name:'Ageing' },
+        { id:'GO:0008203', name:'Cholesterol metabolic process' },
+        { id:'GO:0006629', name:'Lipid metabolic process' },
+      ],
+    }
+  },
+  {
+    data:{
+      id:'e07', source:'age', target:'egfr',
+      direction:'negative', weight:0.62, label:'−0.62 mL/min per year',
+      detail:'Even in perfectly healthy people with no diabetes or hypertension, the kidneys slowly lose filtering capacity with age — about 1 mL/min/1.73m² per year after age 40. This is why an 80-year-old\'s eGFR of 55 may be "normal for age" but still means reduced reserve.',
+      ref:'CKD-EPI 2021 [R1]; Nelson et al. JAMA. 2019 [R8]',
+      kegg:[
+        { id:'hsa04218', name:'Cellular senescence' },
+        { id:'hsa04614', name:'Renin–angiotensin system' },
+      ],
+      go:[
+        { id:'GO:0007568', name:'Ageing' },
+        { id:'GO:0003094', name:'Glomerular filtration' },
+        { id:'GO:0001822', name:'Kidney development' },
+      ],
+    }
+  },
+
+  /* ── GENDER ─────────────────────────────────────────────────────────── */
+  {
+    data:{
+      id:'e08', source:'gender', target:'creatinine',
+      direction:'negative', weight:0.44, label:'×0.85 correction (female)',
+      detail:'Women produce about 15% less creatinine than men of the same age and weight because they have less muscle mass on average. If you use the same creatinine reference range for both sexes, you will systematically miss kidney disease in women. The CKD-EPI formula corrects for this.',
+      ref:'Cockcroft & Gault. Nephron. 1976 [R5]',
+      kegg:[
+        { id:'hsa04010', name:'MAPK signaling (muscle metabolism)' },
+      ],
+      go:[
+        { id:'GO:0007548', name:'Sex differentiation' },
+        { id:'GO:0014706', name:'Striated muscle tissue development' },
+        { id:'GO:0006544', name:'Glycine metabolic process (creatine synthesis)' },
+      ],
+    }
+  },
+  {
+    data:{
+      id:'e09', source:'gender', target:'hdl',
+      direction:'positive', weight:0.34, label:'+0.34 (female → higher HDL)',
+      detail:'Estrogen (the female hormone) stimulates lipoprotein lipase — an enzyme that raises HDL. This is why pre-menopausal women have naturally higher HDL than men of the same age, giving them cardiovascular and kidney protection.',
+      ref:'Project HeartBeat! Int J Obes. 2011 [R10]',
+      kegg:[
+        { id:'hsa04979', name:'Cholesterol metabolism' },
+        { id:'hsa04915', name:'Estrogen signaling pathway' },
+      ],
+      go:[
+        { id:'GO:0007548', name:'Sex differentiation' },
+        { id:'GO:0042157', name:'Lipoprotein metabolic process' },
+        { id:'GO:0033344', name:'Cholesterol efflux' },
+      ],
+    }
+  },
+  {
+    data:{
+      id:'e10', source:'gender', target:'bmi',
+      direction:'contextual', weight:0.15, label:'contextual',
+      detail:'BMI distributions differ between sexes in population studies, but the direction of effect is cohort-dependent and considered contextual rather than a simple causal arrow.',
+      ref:'Body Composition Studies',
+      kegg:[
+        { id:'hsa04910', name:'Insulin signaling pathway' },
+      ],
+      go:[
+        { id:'GO:0007548', name:'Sex differentiation' },
+        { id:'GO:0045598', name:'Regulation of fat cell differentiation' },
+      ],
+    }
+  },
+
+  /* ── WEIGHT ─────────────────────────────────────────────────────────── */
+  {
+    data:{
+      id:'e11', source:'weight', target:'creatinine',
+      direction:'positive', weight:0.45, label:'↑ muscle mass → ↑ creatinine',
+      detail:'Body weight is the main proxy for muscle mass in the Cockcroft-Gault formula. A heavier person generates more creatinine from their muscles. This is why a 100 kg person and a 60 kg person can both have a creatinine of 1.0 mg/dL, yet the heavier person\'s kidneys are working proportionally harder.',
+      ref:'Cockcroft & Gault. Nephron. 1976 [R5]',
+      kegg:[
+        { id:'hsa04217', name:'Necroptosis (muscle catabolism)' },
+      ],
+      go:[
+        { id:'GO:0014706', name:'Striated muscle tissue development' },
+        { id:'GO:0006544', name:'Glycine metabolic process (creatine synthesis)' },
+        { id:'GO:0001822', name:'Kidney development' },
+      ],
+    }
+  },
+  {
+    data:{
+      id:'e12', source:'weight', target:'urineOutput',
+      direction:'positive', weight:0.40, label:'0.6 mL/kg/hr baseline',
+      detail:'KDIGO international guidelines define normal urine output as 0.5–1.0 mL/kg/hr. A 70 kg person should produce ~1,000 mL/day at minimum. A 100 kg person should produce ~1,440 mL/day. Below 0.5 mL/kg/hr = oliguria (dangerous).',
+      ref:'KDIGO AKI Work Group. Kidney Int Suppl. 2012 [R2]',
+      kegg:[
+        { id:'hsa04960', name:'Aldosterone-regulated sodium reabsorption' },
+      ],
+      go:[
+        { id:'GO:0003094', name:'Glomerular filtration' },
+        { id:'GO:0070293', name:'Renal absorption' },
+        { id:'GO:0001822', name:'Kidney development' },
+      ],
+    }
+  },
+
+  /* ── BMI ─────────────────────────────────────────────────────────────── */
+  {
+    data:{
+      id:'e13', source:'bmi', target:'dm',
+      direction:'positive', weight:0.66, label:'+0.66 (strongest BMI effect)',
+      detail:'Obesity is the primary driver of type 2 diabetes. Excess fat tissue (especially around the belly) releases chemicals called adipokines that make cells resistant to insulin. Without insulin working properly, blood sugar builds up. This is called insulin resistance.',
+      ref:'Obesity & Diabetes; Nelson et al. JAMA. 2019 [R8]',
+      kegg:[
+        { id:'hsa04910', name:'Insulin signaling pathway' },
+        { id:'hsa04930', name:'Type II diabetes mellitus' },
+        { id:'hsa04932', name:'Non-alcoholic fatty liver disease (NAFLD)' },
+      ],
+      go:[
+        { id:'GO:0032869', name:'Cellular response to insulin stimulus' },
+        { id:'GO:0045598', name:'Regulation of fat cell differentiation' },
+        { id:'GO:0006006', name:'Glucose metabolic process' },
+      ],
+    }
+  },
+  {
+    data:{
+      id:'e14', source:'bmi', target:'htn',
+      direction:'positive', weight:0.58, label:'+0.58',
+      detail:'Obesity raises blood pressure through multiple mechanisms: (1) the kidneys retain more salt and water in obese people, increasing blood volume; (2) fat tissue activates the RAAS system (a hormone system that raises blood pressure); (3) the heart has to work harder to supply a larger body.',
+      ref:'Obesity & Hypertension literature',
+      kegg:[
+        { id:'hsa04614', name:'Renin–angiotensin system' },
+        { id:'hsa04022', name:'cGMP–PKG signaling' },
+      ],
+      go:[
+        { id:'GO:0045598', name:'Regulation of fat cell differentiation' },
+        { id:'GO:0008217', name:'Regulation of blood pressure' },
+        { id:'GO:0001974', name:'Blood vessel remodeling' },
+      ],
+    }
+  },
+  {
+    data:{
+      id:'e15', source:'bmi', target:'hdl',
+      direction:'negative', weight:0.48, label:'−0.48',
+      detail:'Obesity raises blood triglycerides (another type of fat). High triglycerides compete with and replace HDL in the body\'s lipid transport system, causing HDL to fall. Project HeartBeat! measured this as: HDL = a − 0.777 × BMI.',
+      ref:'Project HeartBeat! Int J Obes. 2011 [R10]',
+      kegg:[
+        { id:'hsa04979', name:'Cholesterol metabolism' },
+        { id:'hsa01212', name:'Fatty acid metabolism' },
+      ],
+      go:[
+        { id:'GO:0042157', name:'Lipoprotein metabolic process' },
+        { id:'GO:0033344', name:'Cholesterol efflux' },
+        { id:'GO:0006629', name:'Lipid metabolic process' },
+      ],
+    }
+  },
+  {
+    data:{
+      id:'e16', source:'bmi', target:'cholesterol',
+      direction:'positive', weight:0.39, label:'+0.39',
+      detail:'Obesity increases the liver\'s production of VLDL (a cholesterol carrier), which raises total cholesterol. Project HeartBeat! measured this as: TC = a + 1.539 × BMI. This is part of the "metabolic syndrome" cluster.',
+      ref:'Project HeartBeat! Int J Obes. 2011 [R10]; Metabolic Syndrome literature',
+      kegg:[
+        { id:'hsa01212', name:'Fatty acid metabolism' },
+        { id:'hsa04979', name:'Cholesterol metabolism' },
+      ],
+      go:[
+        { id:'GO:0008203', name:'Cholesterol metabolic process' },
+        { id:'GO:0006629', name:'Lipid metabolic process' },
+        { id:'GO:0042157', name:'Lipoprotein metabolic process' },
+      ],
+    }
+  },
+  {
+    data:{
+      id:'e17', source:'bmi', target:'egfr',
+      direction:'negative', weight:0.30, label:'−0.45 per unit above BMI 25',
+      detail:'Obesity directly stresses the kidneys. In the short term, the kidneys overwork (hyperfiltration) trying to clean the blood of a larger body. Over years, this overworking damages the filters (glomeruli) and eGFR falls. Each BMI unit above 25 reduces eGFR by ~0.45 in the model.',
+      ref:'Nelson RG et al. JAMA. 2019 [R8]',
+      kegg:[
+        { id:'hsa04614', name:'Renin–angiotensin system' },
+        { id:'hsa04910', name:'Insulin signaling pathway' },
+      ],
+      go:[
+        { id:'GO:0003094', name:'Glomerular filtration' },
+        { id:'GO:0045598', name:'Regulation of fat cell differentiation' },
+        { id:'GO:0001822', name:'Kidney development' },
+      ],
+    }
+  },
+
+  /* ── MAP ─────────────────────────────────────────────────────────────── */
+  {
+    data:{
+      id:'e18', source:'map', target:'creatinine',
+      direction:'positive', weight:0.55, label:'HTN nephrosclerosis / AKI',
+      detail:'Two scenarios both raise creatinine: (1) Chronic high MAP (>110 mmHg): constant high pressure scars the tiny kidney vessels over years (hypertensive nephrosclerosis). (2) Acute low MAP (<65 mmHg): the kidney\'s autoregulation collapses, filtration stops, and creatinine spikes rapidly (pre-renal AKI).',
+      ref:'Vasan 2002 [R4]; Carlström 2015 [R6]',
+      kegg:[
+        { id:'hsa04614', name:'Renin–angiotensin system' },
+        { id:'hsa04022', name:'cGMP–PKG signaling' },
+        { id:'hsa05417', name:'Lipid and atherosclerosis' },
+      ],
+      go:[
+        { id:'GO:0008217', name:'Regulation of blood pressure' },
+        { id:'GO:0003094', name:'Glomerular filtration' },
+        { id:'GO:0001974', name:'Blood vessel remodeling' },
+      ],
+    }
+  },
+  {
+    data:{
+      id:'e19', source:'map', target:'urineOutput',
+      direction:'negative', weight:0.50, label:'< 65 mmHg → urine stops',
+      detail:'Kidneys can keep filtering normally across a wide range of blood pressures — this self-protection is called renal autoregulation. But below MAP ~65 mmHg, this fails completely. The pressure is too low to push blood through the filters. Urine production crashes. This is a medical emergency.',
+      ref:'Carlström M et al. Nat Rev Nephrol. 2015 [R6]',
+      kegg:[
+        { id:'hsa04960', name:'Aldosterone-regulated sodium reabsorption' },
+        { id:'hsa04022', name:'cGMP–PKG signaling' },
+      ],
+      go:[
+        { id:'GO:0003094', name:'Glomerular filtration' },
+        { id:'GO:0070293', name:'Renal absorption' },
+        { id:'GO:0008217', name:'Regulation of blood pressure' },
+      ],
+    }
+  },
+
+  /* ── DMI EPISODE ────────────────────────────────────────────────────── */
+  {
+    data:{
+      id:'e20', source:'dmiEpisode', target:'dm',
+      direction:'positive', weight:0.36, label:'+0.36 → worsens DM burden',
+      detail:'Acute diabetic crises (hospitalisations, DKA — diabetic ketoacidosis, or hyperosmolar events) both reflect and worsen the underlying diabetes. Each episode stresses the body and accelerates disease progression.',
+      ref:'Scientific Reports. 2023',
+      kegg:[
+        { id:'hsa04930', name:'Type II diabetes mellitus' },
+        { id:'hsa04910', name:'Insulin signaling pathway' },
+      ],
+      go:[
+        { id:'GO:0032869', name:'Cellular response to insulin stimulus' },
+        { id:'GO:0006006', name:'Glucose metabolic process' },
+      ],
+    }
+  },
+  {
+    data:{
+      id:'e21', source:'dmiEpisode', target:'egfr',
+      direction:'negative', weight:0.22, label:'−4 per episode',
+      detail:'Each acute diabetic incident episode carries an independent eGFR penalty of ~4 mL/min/1.73m² in the prediction model, beyond the general effect of having diabetes. Acute metabolic crises cause direct tubular injury.',
+      ref:'Scientific Reports. 2023',
+      kegg:[
+        { id:'hsa04933', name:'AGE-RAGE signaling in diabetic complications' },
+        { id:'hsa04930', name:'Type II diabetes mellitus' },
+      ],
+      go:[
+        { id:'GO:0003094', name:'Glomerular filtration' },
+        { id:'GO:0032869', name:'Cellular response to insulin stimulus' },
+        { id:'GO:0006006', name:'Glucose metabolic process' },
+      ],
+    }
+  },
+
+  /* ── DIABETES ────────────────────────────────────────────────────────── */
+  {
+    data:{
+      id:'e22', source:'dm', target:'creatinine',
+      direction:'positive', weight:0.63, label:'+0.63 — diabetic nephropathy',
+      detail:'Chronically high blood sugar damages the kidney\'s filters through a well-understood process: (1) glomerular hyperfiltration (overworking initially), (2) thickening of the filter membranes (mesangial expansion), (3) protein leakage into urine (proteinuria), (4) progressive scarring (glomerulosclerosis). End result: creatinine rises. This is diabetic nephropathy — the leading cause of dialysis worldwide.',
+      ref:'Diabetic Kidney Disease literature; Nelson 2019 [R8]',
+      kegg:[
+        { id:'hsa04933', name:'AGE-RAGE signaling in diabetic complications' },
+        { id:'hsa04930', name:'Type II diabetes mellitus' },
+        { id:'hsa04066', name:'HIF-1 signaling pathway (renal hypoxia)' },
+      ],
+      go:[
+        { id:'GO:0006006', name:'Glucose metabolic process' },
+        { id:'GO:0003094', name:'Glomerular filtration' },
+        { id:'GO:0001822', name:'Kidney development' },
+      ],
+    }
+  },
+  {
+    data:{
+      id:'e23', source:'dm', target:'htn',
+      direction:'positive', weight:0.52, label:'+0.52 (bidirectional)',
+      detail:'Diabetes causes high blood pressure by damaging blood vessel walls (endothelial dysfunction) and activating the RAAS hormonal system, which causes salt retention and vessel constriction. The relationship is bidirectional — HTN also worsens DM. They co-occur so frequently it is called "metabolic syndrome".',
+      ref:'Sun D et al. Circ Res. 2019 [R9]',
+      kegg:[
+        { id:'hsa04614', name:'Renin–angiotensin system' },
+        { id:'hsa04910', name:'Insulin signaling pathway' },
+        { id:'hsa04933', name:'AGE-RAGE signaling in diabetic complications' },
+      ],
+      go:[
+        { id:'GO:0032869', name:'Cellular response to insulin stimulus' },
+        { id:'GO:0008217', name:'Regulation of blood pressure' },
+        { id:'GO:0006006', name:'Glucose metabolic process' },
+      ],
+    }
+  },
+  {
+    data:{
+      id:'e24', source:'dm', target:'egfr',
+      direction:'negative', weight:0.33, label:'−7.5 units (DM flag)',
+      detail:'Simply having diabetes reduces eGFR by 7.5 mL/min/1.73m² in the linear model. When diabetes and hypertension occur together, there is an additional −3.2 unit interaction penalty (the combination is more destructive than each alone).',
+      ref:'Nelson RG et al. JAMA. 2019 [R8]',
+      kegg:[
+        { id:'hsa04933', name:'AGE-RAGE signaling in diabetic complications' },
+        { id:'hsa04930', name:'Type II diabetes mellitus' },
+      ],
+      go:[
+        { id:'GO:0006006', name:'Glucose metabolic process' },
+        { id:'GO:0003094', name:'Glomerular filtration' },
+        { id:'GO:0001822', name:'Kidney development' },
+      ],
+    }
+  },
+  {
+    data:{
+      id:'e25', source:'dm', target:'hemoglobin',
+      direction:'negative', weight:0.40, label:'↓ EPO + inflammation → anemia',
+      detail:'Diabetes causes anemia through three mechanisms: (1) kidney damage reduces EPO production (the hormone that tells bone marrow to make red blood cells); (2) chronic inflammation from diabetes directly suppresses the bone marrow; (3) functional iron deficiency from gut disease in diabetics. Expected Hb drops by ~0.55 g/dL per DM unit in the model.',
+      ref:'Diabetes & Anemia literature',
+      kegg:[
+        { id:'hsa04066', name:'HIF-1 signaling pathway (EPO regulation)' },
+        { id:'hsa04630', name:'JAK-STAT signaling (EPO receptor)' },
+        { id:'hsa04933', name:'AGE-RAGE signaling in diabetic complications' },
+      ],
+      go:[
+        { id:'GO:0030218', name:'Erythrocyte differentiation' },
+        { id:'GO:0046879', name:'Hormone secretion (EPO)' },
+        { id:'GO:0006006', name:'Glucose metabolic process' },
+      ],
+    }
+  },
+
+  /* ── HYPERTENSION ───────────────────────────────────────────────────── */
+  {
+    data:{
+      id:'e26', source:'htn', target:'creatinine',
+      direction:'positive', weight:0.55, label:'+0.55 — nephrosclerosis',
+      detail:'Chronically high blood pressure damages the small arteries entering each kidney filter (afferent arterioles). The vessels become thickened and stiff, restricting blood flow to the glomeruli. Over years, the filters scar and shut down one by one — this process is hypertensive nephrosclerosis.',
+      ref:'HTN & CKD literature; Nelson 2019 [R8]',
+      kegg:[
+        { id:'hsa04614', name:'Renin–angiotensin system' },
+        { id:'hsa05417', name:'Lipid and atherosclerosis' },
+        { id:'hsa04022', name:'cGMP–PKG signaling' },
+      ],
+      go:[
+        { id:'GO:0008217', name:'Regulation of blood pressure' },
+        { id:'GO:0001974', name:'Blood vessel remodeling' },
+        { id:'GO:0003094', name:'Glomerular filtration' },
+      ],
+    }
+  },
+  {
+    data:{
+      id:'e27', source:'htn', target:'egfr',
+      direction:'negative', weight:0.25, label:'−5.5 units (HTN flag)',
+      detail:'Having hypertension directly reduces eGFR by 5.5 units in the linear model, with additional age×HTN (−0.02 per year at older age) and cholesterol×HTN interaction penalties, reflecting the compounding damage of combined risk factors.',
+      ref:'Nelson RG et al. JAMA. 2019 [R8]',
+      kegg:[
+        { id:'hsa04614', name:'Renin–angiotensin system' },
+      ],
+      go:[
+        { id:'GO:0008217', name:'Regulation of blood pressure' },
+        { id:'GO:0003094', name:'Glomerular filtration' },
+      ],
+    }
+  },
+
+  /* ── CREATININE ─────────────────────────────────────────────────────── */
+  {
+    data:{
+      id:'e28', source:'creatinine', target:'egfr',
+      direction:'negative', weight:0.82, label:'−0.82 (DOMINANT edge)',
+      detail:'This is the most important arrow in the entire network. Creatinine is the primary input to the CKD-EPI 2021 equation. Every 1 mg/dL rise in creatinine drops eGFR by ~12 units in the linear model. The actual CKD-EPI formula is non-linear (exponential), so the effect is even steeper at high creatinine values. This single relationship defines what CKD staging means.',
+      ref:'Inker LA et al. N Engl J Med. 2021 [R1]',
+      kegg:[
+        { id:'hsa04614', name:'Renin–angiotensin system' },
+        { id:'hsa04960', name:'Aldosterone-regulated sodium reabsorption' },
+      ],
+      go:[
+        { id:'GO:0003094', name:'Glomerular filtration' },
+        { id:'GO:0001822', name:'Kidney development' },
+        { id:'GO:0070293', name:'Renal absorption' },
+      ],
+    }
+  },
+  {
+    data:{
+      id:'e29', source:'creatinine', target:'potassium',
+      direction:'positive', weight:0.44, label:'↓ eGFR → K⁺ cannot be excreted',
+      detail:'When creatinine rises, eGFR falls, and the kidney\'s tubules can no longer secrete enough potassium into the urine. Potassium accumulates in the blood. The mathematical relationship is: K⁺ expected = 4.10 + 0.90 × e^(−eGFR/25). At eGFR 90 → K⁺ ≈ 4.1; at eGFR 15 → K⁺ ≈ 4.6; at eGFR 5 → K⁺ ≈ 4.8+. Hyperkalemia (>5.5) causes fatal arrhythmias.',
+      ref:'Kovesdy CP et al. CJASN. 2012 [R3]',
+      kegg:[
+        { id:'hsa04960', name:'Aldosterone-regulated sodium reabsorption' },
+        { id:'hsa04961', name:'Endocrine-regulated calcium & potassium reabsorption' },
+      ],
+      go:[
+        { id:'GO:0006813', name:'Potassium ion transport' },
+        { id:'GO:0070293', name:'Renal absorption' },
+        { id:'GO:0003094', name:'Glomerular filtration' },
+      ],
+    }
+  },
+  {
+    data:{
+      id:'e30', source:'creatinine', target:'urineOutput',
+      direction:'negative', weight:0.40, label:'↓ eGFR → less filtrate → ↓ urine',
+      detail:'Urine starts as filtered blood plasma (the glomerular filtrate). When creatinine rises → eGFR falls → less blood is filtered per minute → less filtrate is produced → urine output drops. At eGFR < 10, the model predicts only 20% of normal urine output. Oliguria (<0.5 mL/kg/hr) is a critical warning sign.',
+      ref:'KDIGO AKI 2012 [R2]; CKD-EPI 2021 [R1]',
+      kegg:[
+        { id:'hsa04960', name:'Aldosterone-regulated sodium reabsorption' },
+      ],
+      go:[
+        { id:'GO:0003094', name:'Glomerular filtration' },
+        { id:'GO:0070293', name:'Renal absorption' },
+        { id:'GO:0001822', name:'Kidney development' },
+      ],
+    }
+  },
+  {
+    data:{
+      id:'e31', source:'creatinine', target:'hemoglobin',
+      direction:'negative', weight:0.44, label:'↓ EPO production → anemia',
+      detail:'As kidney function declines (high creatinine), the peritubular fibroblasts in the kidney — specialised cells that make EPO — are progressively damaged and destroyed. EPO is the hormone that tells bone marrow to produce red blood cells. Without it, hemoglobin falls. Expected Hb = 14.8 − 1.2 × max(0, creatinine − 1) in the propagation model.',
+      ref:'Anemia of CKD literature',
+      kegg:[
+        { id:'hsa04066', name:'HIF-1 signaling pathway (EPO production)' },
+        { id:'hsa04630', name:'JAK-STAT signaling pathway (EPO receptor)' },
+      ],
+      go:[
+        { id:'GO:0030218', name:'Erythrocyte differentiation' },
+        { id:'GO:0046879', name:'Hormone secretion (EPO)' },
+        { id:'GO:0001822', name:'Kidney development' },
+      ],
+    }
+  },
+
+  /* ── CHOLESTEROL ────────────────────────────────────────────────────── */
+  {
+    data:{
+      id:'e32', source:'cholesterol', target:'egfr',
+      direction:'negative', weight:0.26, label:'−0.26 — vascular injury',
+      detail:'High cholesterol slowly builds plaques in blood vessel walls (atherosclerosis). When this happens in the renal arteries and their branches, kidney blood supply is progressively choked off. eGFR falls as the kidney receives less perfusion.',
+      ref:'Lipids & Kidney Disease literature',
+      kegg:[
+        { id:'hsa05417', name:'Lipid and atherosclerosis' },
+        { id:'hsa04979', name:'Cholesterol metabolism' },
+      ],
+      go:[
+        { id:'GO:0008203', name:'Cholesterol metabolic process' },
+        { id:'GO:0003094', name:'Glomerular filtration' },
+        { id:'GO:0042157', name:'Lipoprotein metabolic process' },
+      ],
+    }
+  },
+  {
+    data:{
+      id:'e33', source:'cholesterol', target:'htn',
+      direction:'positive', weight:0.19, label:'atherosclerosis → ↑ BP',
+      detail:'Cholesterol plaques in artery walls make the arteries stiffer (less elastic). Stiff arteries cannot absorb the pulse of each heartbeat, so systolic blood pressure rises. This is the direct atherosclerosis-to-hypertension pathway.',
+      ref:'Lipids & Hypertension literature',
+      kegg:[
+        { id:'hsa05417', name:'Lipid and atherosclerosis' },
+        { id:'hsa04022', name:'cGMP–PKG signaling' },
+      ],
+      go:[
+        { id:'GO:0042157', name:'Lipoprotein metabolic process' },
+        { id:'GO:0008217', name:'Regulation of blood pressure' },
+        { id:'GO:0001974', name:'Blood vessel remodeling' },
+      ],
+    }
+  },
+
+  /* ── HDL ────────────────────────────────────────────────────────────── */
+  {
+    data:{
+      id:'e34', source:'hdl', target:'egfr',
+      direction:'positive', weight:0.22, label:'+0.22 — protective',
+      detail:'HDL is anti-inflammatory and anti-atherosclerotic — it scavenges cholesterol from vessel walls and prevents plaque formation. Higher HDL therefore protects the tiny vessels inside the kidney\'s filters. Each 10 mg/dL rise in HDL above 50 adds +0.23 to predicted eGFR in the linear model.',
+      ref:'Dyslipidemia in CKD literature; Nelson 2019 [R8]',
+      kegg:[
+        { id:'hsa04979', name:'Cholesterol metabolism' },
+        { id:'hsa05417', name:'Lipid and atherosclerosis' },
+      ],
+      go:[
+        { id:'GO:0033344', name:'Cholesterol efflux' },
+        { id:'GO:0042157', name:'Lipoprotein metabolic process' },
+        { id:'GO:0003094', name:'Glomerular filtration' },
+      ],
+    }
+  },
+
+  /* ── HEMOGLOBIN ─────────────────────────────────────────────────────── */
+  {
+    data:{
+      id:'e35', source:'hemoglobin', target:'egfr',
+      direction:'positive', weight:0.28, label:'+0.85 per g/dL',
+      detail:'Hemoglobin is both a consequence of kidney failure (EPO deficiency) and an independent predictor. Low hemoglobin causes renal hypoxia — the kidney tissue itself gets less oxygen, which damages tubular cells and worsens GFR. Each g/dL of hemoglobin adds +0.85 to predicted eGFR in the linear model. Treating anemia in CKD patients with EPO injections modestly improves outcomes.',
+      ref:'Anemia of CKD; Nelson RG et al. JAMA. 2019 [R8]',
+      kegg:[
+        { id:'hsa04066', name:'HIF-1 signaling pathway (hypoxia response)' },
+        { id:'hsa04630', name:'JAK-STAT signaling (EPO receptor)' },
+      ],
+      go:[
+        { id:'GO:0030218', name:'Erythrocyte differentiation' },
+        { id:'GO:0003094', name:'Glomerular filtration' },
+        { id:'GO:0001889', name:'Liver development (EPO secondary production)' },
+      ],
+    }
+  },
+];
+
+/* ─────────────────────────────────────────
+   BUILD ELEMENTS
+───────────────────────────────────────── */
+const elements = [
+  ...nodes.map(n => ({
+    group: 'nodes',
+    data: { ...n.data, color: CAT_COLOR[n.data.category] }
+  })),
+  ...edges.map(e => ({
+    group: 'edges',
+    data: {
+      ...e.data,
+      color:     EDGE_COLOR[e.data.direction] || '#718096',
+      lineStyle: e.data.direction === 'contextual' ? 'dashed' : 'solid',
+      width:     Math.max(1.5, Math.abs(e.data.weight) * 7),
+    }
+  })),
+];
+
+/* ─────────────────────────────────────────
+   CYTOSCAPE INIT
+───────────────────────────────────────── */
+const cy = cytoscape({
+  container: document.getElementById('cy'),
+  elements,
+  style: [
+    {
+      selector: 'node',
+      style: {
+        'background-color':  'data(color)',
+        'label':             'data(label)',
+        'color':             '#fff',
+        'font-size':         '11px',
+        'font-weight':       '600',
+        'text-valign':       'center',
+        'text-halign':       'center',
+        'text-wrap':         'wrap',
+        'text-max-width':    '80px',
+        'width':             '80px',
+        'height':            '80px',
+        'border-width':      '2px',
+        'border-color':      'rgba(255,255,255,0.15)',
+        'shadow-blur':       '12',
+        'shadow-color':      'data(color)',
+        'shadow-opacity':    '0.35',
+        'shadow-offset-x':   '0',
+        'shadow-offset-y':   '0',
+      }
+    },
+    {
+      selector: 'node[id="egfr"]',
+      style: {
+        'width':          '100px',
+        'height':         '100px',
+        'font-size':      '13px',
+        'border-width':   '3px',
+        'border-color':   '#F1C40F',
+        'shadow-opacity': '0.7',
+      }
+    },
+    {
+      selector: 'node[id="creatinine"]',
+      style: {
+        'width':  '90px',
+        'height': '90px',
+      }
+    },
+    {
+      selector: 'edge',
+      style: {
+        'line-color':         'data(color)',
+        'target-arrow-color': 'data(color)',
+        'target-arrow-shape': 'triangle',
+        'arrow-scale':        1.2,
+        'width':              'data(width)',
+        'curve-style':        'bezier',
+        'line-style':         'data(lineStyle)',
+        'opacity':            0.70,
+      }
+    },
+    { selector: 'node.highlighted', style: { 'border-width':'4px','border-color':'#fff','shadow-opacity':'0.9', opacity:1 } },
+    { selector: 'edge.highlighted', style: { opacity:1 } },
+    { selector: '.dimmed',          style: { opacity:0.07 } },
+  ],
+  layout: {
+    name:'dagre', rankDir:'LR', nodeSep:55, rankSep:110,
+    edgeSep:20, padding:40, animate:true, animationDuration:700,
+  },
+});
+
+/* ─────────────────────────────────────────
+   INFO PANEL
+───────────────────────────────────────── */
+const infoPanel = document.getElementById('info-panel');
+
+function keggURL(id) {
+  return `https://www.kegg.jp/pathway/${id}`;
+}
+function goURL(id) {
+  return `https://www.ebi.ac.uk/QuickGO/term/${id}`;
+}
+
+function renderMolecularLayer(d) {
+  const keggTags = (d.kegg || []).map(k =>
+    `<a class="mol-tag kegg-tag" href="${keggURL(k.id)}" target="_blank" title="${k.id}">${k.id}<br/><span style="font-weight:400;font-size:10px;">${k.name}</span></a>`
+  ).join('');
+
+  const goTags = (d.go || []).map(g =>
+    `<a class="mol-tag go-tag" href="${goURL(g.id)}" target="_blank" title="${g.id}">${g.id}<br/><span style="font-weight:400;font-size:10px;">${g.name}</span></a>`
+  ).join('');
+
+  return `
+    <div class="mol-box kegg">
+      <div class="mol-title">KEGG Pathways (molecular mechanism)</div>
+      ${keggTags || '<span style="color:#4a7a5e">No pathway mapped</span>'}
+    </div>
+    <div class="mol-box go">
+      <div class="mol-title">GO Biological Processes</div>
+      ${goTags || '<span style="color:#6a4a9a">No GO term mapped</span>'}
+    </div>
+  `;
+}
+
+cy.on('tap', 'node', function(evt) {
+  const d = evt.target.data();
+  infoPanel.innerHTML = `
+    <strong style="font-size:13px;">${d.label}</strong><br/>
+    <span style="color:#718096;">Unit: ${d.unit} &nbsp;|&nbsp; Range: ${d.range}</span>
+    <hr style="border-color:#2d3748;margin:8px 0"/>
+    <span style="color:#CBD5E0;">${d.desc}</span>
+  `;
+});
+
+cy.on('tap', 'edge', function(evt) {
+  const d   = evt.target.data();
+  const dir = d.direction === 'positive' ? '↑ Increases / Worsens' : d.direction === 'negative' ? '↓ Decreases / Protects' : '⟷ Contextual';
+  const col = d.direction === 'positive' ? '#FC8181' : d.direction === 'negative' ? '#63B3ED' : '#A0AEC0';
+  infoPanel.innerHTML = `
+    <strong style="font-size:13px;">${d.source} → ${d.target}</strong><br/>
+    <span style="color:${col};font-weight:600;">${dir}</span>
+    &nbsp;|&nbsp;
+    <span style="color:#718096;">Strength: ${Math.abs(d.weight).toFixed(2)}</span>
+    <hr style="border-color:#2d3748;margin:8px 0"/>
+    <span style="color:#CBD5E0;">${d.detail}</span>
+    <div class="ref-line">${d.ref}</div>
+    ${renderMolecularLayer(d)}
+  `;
+});
+
+cy.on('tap', function(evt) {
+  if (evt.target === cy) {
+    infoPanel.innerHTML = 'Click any node or edge.<br/><span style="color:#52b788;font-size:11px;">Edges show KEGG pathways &amp; GO biological processes.</span>';
+  }
+});
+
+/* ─────────────────────────────────────────
+   TOOLTIP
+───────────────────────────────────────── */
+const tooltip = document.getElementById('tooltip');
+
+cy.on('mouseover', 'node', function(evt) {
+  const d = evt.target.data();
+  const p = evt.renderedPosition;
+  tooltip.innerHTML = `<div class="t-title">${d.label}</div><div>${d.unit} · ${d.range}</div>`;
+  tooltip.style.display = 'block';
+  tooltip.style.left = (p.x + 70) + 'px';
+  tooltip.style.top  = (p.y + 20) + 'px';
+});
+cy.on('mousemove', 'node', function(evt) {
+  const p = evt.renderedPosition;
+  tooltip.style.left = (p.x + 70) + 'px';
+  tooltip.style.top  = (p.y + 20) + 'px';
+});
+cy.on('mouseout', 'node', () => { tooltip.style.display = 'none'; });
+
+cy.on('mouseover', 'edge', function(evt) {
+  const d = evt.target.data();
+  const p = evt.renderedPosition;
+  const col = d.direction === 'positive' ? '#FC8181' : d.direction === 'negative' ? '#63B3ED' : '#A0AEC0';
+  tooltip.innerHTML = `
+    <div class="t-title">${d.source} → ${d.target}</div>
+    <div style="color:${col}">${d.label}</div>
+    <div class="t-ref">${d.ref}</div>
+  `;
+  tooltip.style.display = 'block';
+  tooltip.style.left = (p.x + 10) + 'px';
+  tooltip.style.top  = (p.y - 10) + 'px';
+});
+cy.on('mousemove', 'edge', function(evt) {
+  const p = evt.renderedPosition;
+  tooltip.style.left = (p.x + 10) + 'px';
+  tooltip.style.top  = (p.y - 10) + 'px';
+});
+cy.on('mouseout', 'edge', () => { tooltip.style.display = 'none'; });
+
+/* ─────────────────────────────────────────
+   CONTROLS
+───────────────────────────────────────── */
+function resetView() {
+  cy.layout({ name:'dagre', rankDir:'LR', nodeSep:55, rankSep:110,
+    edgeSep:20, padding:40, animate:true, animationDuration:600 }).run();
+}
+function fitView() {
+  cy.animate({ fit:{ eles:cy.elements(), padding:40 }, duration:400 });
+}
+function showAll() {
+  cy.elements().removeClass('highlighted dimmed');
+}
+function highlightEgfrPath() {
+  cy.elements().removeClass('highlighted dimmed').addClass('dimmed');
+  const egfrNode = cy.$('#egfr');
+  egfrNode.predecessors().addClass('highlighted').removeClass('dimmed');
+  egfrNode.addClass('highlighted').removeClass('dimmed');
+}
+</script>
+</body>
+</html>

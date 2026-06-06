@@ -1,15 +1,19 @@
 import React, { useState, useMemo, useCallback, useEffect, useRef } from 'react';
-import Sidebar           from './components/Sidebar.jsx';
-import ControlPanel      from './components/ControlPanel.jsx';
+import Sidebar from './components/Sidebar.jsx';
+import ControlPanel from './components/ControlPanel.jsx';
 import MainVisualization from './components/MainVisualization.jsx';
-import ResultsPanel      from './components/ResultsPanel.jsx';
+import ResultsPanel from './components/ResultsPanel.jsx';
 import RelationshipsPage from './components/RelationshipsPage.jsx';
+import CatBoostPrediction from './components/CatBoostPrediction.jsx';
+import EquationsPrediction from './components/EquationsPrediction.jsx';
+import SimilarCasesPage from './components/SimilarCasesPage.jsx';
 import {
   calculateEGFR,
   getCKDStage,
   getRiskAssessment,
   generateInsight,
   PRESETS,
+  calculateAllEgfrEquations,
 } from './utils/egfrCalculation.js';
 import {
   checkClinicalConsistency,
@@ -18,6 +22,7 @@ import {
 } from './utils/clinicalRelationships.js';
 
 const INITIAL     = PRESETS.normal;
+const DEFAULT_EQUATION_KEY = 'ckd-epi-2009';
 const MAX_HISTORY = 30;
 const AUTO_PROP_FIELDS = ['creatinine', 'hemoglobin', 'hdlCholesterol', 'totalCholesterol', 'diabetes', 'hypertension'];
 
@@ -76,25 +81,42 @@ function runLocalConditionalPropagation(prevData, nextData, changedKey) {
 }
 
 export default function App() {
+  const [egfrEquationKey, setEgfrEquationKey] = useState(DEFAULT_EQUATION_KEY);
   const [activeNav,    setActiveNav]    = useState('simulation');
   const [patientData,  setPatientData]  = useState(INITIAL);
   const [history,      setHistory]      = useState([]);
   const [beforeEGFR,   setBeforeEGFR]   = useState(null);
   const [isSimulating, setIsSimulating] = useState(false);
   const [lastChanged,  setLastChanged]  = useState(null);
-  const [relationshipData, setRelationshipData] = useState(null);
+  const [relationshipData,  setRelationshipData]  = useState(null);
+  const [futurePredictions, setFuturePredictions] = useState({
+    egfr180: null, egfr180Lower: null, egfr180Upper: null, sigma180: null,
+    egfr360: null, egfr360Lower: null, egfr360Upper: null, sigma360: null,
+    loading: false,
+  });
   const isApplyingAutoPropagation = useRef(false);
 
   // ── Real-time clinical results ──────────────────────────────────────────
-  const results = useMemo(() => {
-    const fallbackEgfr = calculateEGFR(patientData);
-    const egfr         = relationshipData?.egfrModel?.predictedEgfr ?? fallbackEgfr;
-    const ckdStage    = getCKDStage(egfr);
-    const risks       = getRiskAssessment({ ...patientData, egfr });
-    const insight     = generateInsight({ ...patientData, egfr, ckdStage });
-    const consistency = checkClinicalConsistency(patientData);
-    return { egfr, ckdStage, risks, insight, consistency };
-  }, [patientData, relationshipData]);
+  // Compute all eGFR equations
+  const allEgfrResults = useMemo(() => {
+    return calculateAllEgfrEquations({
+      age: patientData.age,
+      gender: patientData.gender,
+      creatinine: patientData.creatinine,
+      isBlack: patientData.race === 'black',
+      bun: patientData.bun,
+      albumin: patientData.albumin,
+    });
+  }, [patientData]);
+
+  // Pick the selected equation result
+  const selectedEgfrObj = allEgfrResults.find(eq => eq.key === egfrEquationKey) || allEgfrResults[0];
+  const egfr = selectedEgfrObj.value;
+  const ckdStage = getCKDStage(egfr);
+  const risks = getRiskAssessment({ ...patientData, egfr });
+  const insight = generateInsight({ ...patientData, egfr, ckdStage });
+  const consistency = checkClinicalConsistency(patientData);
+  const results = { egfr, ckdStage, risks, insight, consistency, egfrEquationKey, allEgfrResults };
 
   // ── Bayesian posteriors — expected value of each feature given all others
   const posteriors = useMemo(
@@ -116,6 +138,46 @@ export default function App() {
       setHistory(h => [...h.slice(-(MAX_HISTORY - 1)), { egfr: results.egfr, ts: Date.now() }]);
     }
   }, [results.egfr]);
+
+  // ── Future eGFR predictions (stacking model: 180-day, 360-day) ───────────
+  useEffect(() => {
+    const controller = new AbortController();
+    const timer = setTimeout(async () => {
+      setFuturePredictions(p => ({ ...p, loading: true }));
+      try {
+        const res = await fetch('/ml/predict_future_egfr', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            gender:              patientData.gender === 'female' ? 1.0 : 0.0,
+            age:                 patientData.age,
+            dm_episode:          patientData.dmiEpisode ?? patientData.diabetes ?? 0,
+            hypertension_status: patientData.hypertension ?? 0,
+            egfr:                results.egfr,
+            bmi:                 patientData.bmi,
+            hemoglobin:          patientData.hemoglobin,
+          }),
+          signal: controller.signal,
+        });
+        if (!res.ok) throw new Error('predict_future_egfr failed');
+        const data = await res.json();
+        setFuturePredictions({
+          egfr180:      data.egfr_180,
+          egfr180Lower: data.egfr_180_lower,
+          egfr180Upper: data.egfr_180_upper,
+          sigma180:     data.sigma_180,
+          egfr360:      data.egfr_360,
+          egfr360Lower: data.egfr_360_lower,
+          egfr360Upper: data.egfr_360_upper,
+          sigma360:     data.sigma_360,
+          loading: false,
+        });
+      } catch {
+        setFuturePredictions(p => ({ ...p, loading: false }));
+      }
+    }, 200);
+    return () => { controller.abort(); clearTimeout(timer); };
+  }, [patientData, results.egfr]);
 
   // ── Backend relationship model (pair table + BN + trends) ──────────────
   useEffect(() => {
@@ -249,9 +311,28 @@ export default function App() {
       {/* 1 — Sidebar */}
       <Sidebar activeNav={activeNav} setActiveNav={setActiveNav} alertCount={alertCount} />
 
-      {activeNav === 'trends' ? (
-        <RelationshipsPage />
-      ) : (
+      {/* Navigation-based rendering — scrollable so ML / relationships pages are not clipped by overflow-hidden */}
+      {activeNav === 'similarity' && (
+        <div className="flex-1 min-h-0 min-w-0 overflow-y-auto flex flex-col">
+          <SimilarCasesPage patientData={patientData} liveEgfr={results.egfr} />
+        </div>
+      )}
+      {activeNav === 'trends' && (
+        <div className="flex-1 min-h-0 min-w-0 overflow-y-auto">
+          <RelationshipsPage />
+        </div>
+      )}
+      {activeNav === 'catboost' && (
+        <div className="flex-1 min-h-0 min-w-0 overflow-y-auto">
+          <CatBoostPrediction />
+        </div>
+      )}
+      {activeNav === 'equations' && (
+        <div className="flex-1 min-h-0 min-w-0 overflow-y-auto">
+          <EquationsPrediction />
+        </div>
+      )}
+      {['dashboard', 'patient', 'simulation', 'alerts', 'settings'].includes(activeNav) && (
         <>
           {/* 2 — Control panel */}
           <ControlPanel
@@ -271,10 +352,18 @@ export default function App() {
             history={history}
             beforeEGFR={beforeEGFR}
             patientData={patientData}
+            futurePredictions={futurePredictions}
           />
 
           {/* 4 — Results panel */}
-          <ResultsPanel results={results} patientData={patientData} relationshipData={relationshipData} />
+          <ResultsPanel
+            results={results}
+            patientData={patientData}
+            relationshipData={relationshipData}
+            egfrEquationKey={egfrEquationKey}
+            setEgfrEquationKey={setEgfrEquationKey}
+            futurePredictions={futurePredictions}
+          />
         </>
       )}
     </div>

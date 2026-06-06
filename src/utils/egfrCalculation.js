@@ -171,3 +171,111 @@ export const PRESETS = {
   hypertension:{ label: 'Hypertension',   age: 58, gender: 'male',   creatinine: 1.7,  map: 122, potassium: 4.9, urineOutput: 1100, weight: 82, bmi: 32, hdlCholesterol: 42, totalCholesterol: 225, hemoglobin: 12.1, dmiEpisode: 0, hypertension: 1, diabetes: 1 },
   dialysis:    { label: 'Dialysis State', age: 67, gender: 'female', creatinine: 9.2,  map: 88,  potassium: 5.9, urineOutput: 120,  weight: 60, bmi: 29, hdlCholesterol: 38, totalCholesterol: 210, hemoglobin: 9.2, dmiEpisode: 1, hypertension: 1, diabetes: 1 },
 };
+
+
+// --- eGFR Equations ---
+
+// CKD-EPI 2009 (Levey et al.)
+export function egfrCkdEpi2009({ creatinine, age, gender, isBlack }) {
+  const scr = Math.max(0.1, Number(creatinine));
+  const isFemale = gender === 'female';
+  const kappa = isFemale ? 0.7 : 0.9;
+  const alpha = isFemale ? -0.329 : -0.411;
+  const sexFactor = isFemale ? 1.018 : 1.0;
+  const raceFactor = isBlack ? 1.159 : 1.0;
+  return 141
+    * Math.pow(Math.min(scr / kappa, 1), alpha)
+    * Math.pow(Math.max(scr / kappa, 1), -1.209)
+    * Math.pow(0.993, age)
+    * sexFactor
+    * raceFactor;
+}
+
+// MDRD 4-variable (IDMS-traceable)
+export function egfrMdrd4({ creatinine, age, gender, isBlack }) {
+  const scr = Math.max(0.1, Number(creatinine));
+  const isFemale = gender === 'female';
+  const sexFactor = isFemale ? 0.742 : 1.0;
+  const raceFactor = isBlack ? 1.212 : 1.0;
+  return 175
+    * Math.pow(scr, -1.154)
+    * Math.pow(age, -0.203)
+    * sexFactor
+    * raceFactor;
+}
+
+
+// Japanese equations (from user)
+export function egfrEq1(scr, age, isFemale) {
+  const sf = isFemale ? 0.742 : 1.0;
+  return 0.741 * 175.0 * Math.pow(scr, -1.154) * Math.pow(age, -0.203) * sf;
+}
+export function egfrEq2(scr, age, isFemale) {
+  const sf = isFemale ? 0.782 : 1.0;
+  return 171.0 * Math.pow(scr, -1.004) * Math.pow(age, -0.287) * sf;
+}
+export function egfrEq3(scr, age, isFemale) {
+  const sf = isFemale ? 0.742 : 1.0;
+  return 0.808 * 175.0 * Math.pow(scr, -1.154) * Math.pow(age, -0.203) * sf;
+}
+export function egfrEq4(scr, age, isFemale) {
+  const sf = isFemale ? 0.739 : 1.0;
+  return 194.0 * Math.pow(scr, -1.094) * Math.pow(age, -0.287) * sf;
+}
+
+// --- Unified eGFR calculation/report ---
+export function calculateAllEgfrEquations({ age, gender, creatinine, isBlack, bun, albumin }) {
+  const isFemale = gender === 'female';
+  const scr = Math.max(0.1, Number(creatinine));
+  const ageVal = Math.max(18, Math.min(100, Number(age)));
+  const results = [];
+
+  // CKD-EPI 2009
+  results.push({
+    key: 'ckd-epi-2009',
+    label: 'CKD-EPI 2009',
+    value: egfrCkdEpi2009({ creatinine: scr, age: ageVal, gender, isBlack }),
+    reference: 'Levey et al. 2009',
+    type: 'primary',
+  });
+  // MDRD 4-variable
+  results.push({
+    key: 'mdrd-4',
+    label: 'MDRD 4-variable',
+    value: egfrMdrd4({ creatinine: scr, age: ageVal, gender, isBlack }),
+    reference: 'Levey et al. 2006',
+    type: 'reference',
+  });
+  // MDRD 6-variable removed
+  // Japanese equations
+  results.push({
+    key: 'jpn-eq1',
+    label: 'Japanese Eq1 (old)',
+    value: egfrEq1(scr, ageVal, isFemale),
+    reference: 'Matsuo et al.',
+    type: 'japanese',
+  });
+  results.push({
+    key: 'jpn-eq2',
+    label: 'Japanese Eq2 (JSN-CKDI)',
+    value: egfrEq2(scr, ageVal, isFemale),
+    reference: 'Matsuo et al.',
+    type: 'japanese',
+  });
+  results.push({
+    key: 'jpn-eq3',
+    label: 'Japanese Eq3 (new)',
+    value: egfrEq3(scr, ageVal, isFemale),
+    reference: 'Matsuo et al.',
+    type: 'japanese',
+  });
+  results.push({
+    key: 'jpn-eq4',
+    label: 'Japanese Eq4 (3-var)',
+    value: egfrEq4(scr, ageVal, isFemale),
+    reference: 'Matsuo et al.',
+    type: 'japanese',
+  });
+
+  return results;
+}

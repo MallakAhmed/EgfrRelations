@@ -6,7 +6,8 @@
   "scripts": {
     "dev": "node node_modules/vite/bin/vite.js",
     "dev:server": "node backend/server.js",
-    "dev:full": "node \"./node_modules/concurrently/dist/bin/concurrently.js\" \"npm run dev\" \"npm run dev:server\"",
+    "dev:ml": "python -m uvicorn main:app --host 127.0.0.1 --port 8000 --app-dir backend",
+    "dev:full": "node \"./node_modules/concurrently/dist/bin/concurrently.js\" \"npm run dev\" \"npm run dev:server\" \"npm run dev:ml\"",
     "build": "node node_modules/vite/bin/vite.js build",
     "preview": "node node_modules/vite/bin/vite.js preview"
   },
@@ -16,7 +17,7 @@
     "lucide-react": "^0.294.0",
     "react": "^18.2.0",
     "react-dom": "^18.2.0",
-    "recharts": "^2.9.0"
+    "recharts": "^2.15.4"
   },
   "devDependencies": {
     "@vitejs/plugin-react": "^4.2.0",

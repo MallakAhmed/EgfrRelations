@@ -1,13 +1,16 @@
 import React from 'react';
 import {
   LayoutDashboard, Users, Activity, TrendingUp,
-  Bell, Settings, Cpu, User, ChevronRight,
+  Bell, Settings, Cpu, User, ChevronRight, Network,
 } from 'lucide-react';
 
 const NAV = [
   { id: 'dashboard',   label: 'Dashboard',    icon: LayoutDashboard },
   { id: 'patient',     label: 'Patient Data', icon: Users },
   { id: 'simulation',  label: 'Simulation',   icon: Activity },
+  { id: 'similarity',  label: 'Similar Cases', icon: Network },
+  { id: 'catboost',    label: 'CatBoost ML',  icon: Cpu },
+  { id: 'equations',   label: '6 Equations',  icon: TrendingUp },
   { id: 'trends',      label: 'Relationships', icon: TrendingUp },
   { id: 'alerts',      label: 'Alerts',       icon: Bell },
   { id: 'settings',    label: 'Settings',     icon: Settings },

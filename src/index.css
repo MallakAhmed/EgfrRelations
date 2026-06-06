@@ -133,3 +133,9 @@
   to   { opacity: 1; }
 }
 .fade-in { animation: fadeIn 0.5s ease-out; }
+
+@keyframes kidneyBreath {
+  0%, 100% { transform: scale(1)    translateY(0px); }
+  50%       { transform: scale(1.04) translateY(-5px); }
+}
+.kidney-breath { animation: kidneyBreath 3.8s ease-in-out infinite; }
