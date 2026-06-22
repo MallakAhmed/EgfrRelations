@@ -55,7 +55,8 @@ function buildRow(pd, egfr) {
 }
 
 async function fetchBatch(rows, signal) {
-  const res = await fetch('/ml/predict_future_egfr_batch', {
+  const ML_BASE = import.meta.env.VITE_ML_API_URL || '/ml';
+  const res = await fetch(`${ML_BASE}/predict_future_egfr_batch`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ rows }),

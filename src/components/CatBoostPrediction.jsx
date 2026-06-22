@@ -2,7 +2,7 @@ import React, { useState, useMemo } from 'react';
 import TrendCharts from './TrendCharts.jsx';
 import { ML_TABLE_PREVIEW_ROWS } from './mlUploadShared.js';
 
-const ML_BASE = import.meta.env.DEV ? '/ml' : 'http://127.0.0.1:8000';
+const ML_BASE = import.meta.env.VITE_ML_API_URL || '/ml';
 
 async function parseMlError(res) {
   try {

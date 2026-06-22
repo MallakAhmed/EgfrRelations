@@ -18,28 +18,47 @@ import {
 
 /* ── Circular eGFR gauge ─────────────────────────── */
 function EGFRGauge({ egfr, ckdStage }) {
-  const R   = 72;
-  const cx  = 96, cy = 96;
+  const R    = 70;
+  const cx   = 96, cy = 100;
   const circ = 2 * Math.PI * R;
   // 240° arc gauge (starts at 150°, sweeps 240°)
-  const arcLen   = (240 / 360) * circ;
-  const filled   = arcLen * Math.min(egfr / 120, 1);
-  const gap      = circ - arcLen;
-  const color    = ckdStage.gaugeColor;
+  const arcLen = (240 / 360) * circ;
+  const frac   = Math.min(Math.max(egfr / 120, 0), 1);
+  const filled = arcLen * frac;
+  const gap    = circ - arcLen;
+  const color  = ckdStage.gaugeColor;
+
+  // Tip dot position
+  const tipAngle = (150 + frac * 240) * (Math.PI / 180);
+  const tipX = cx + R * Math.cos(tipAngle);
+  const tipY = cy + R * Math.sin(tipAngle);
+
+  const TICKS = [0, 30, 60, 90, 120];
 
   return (
-    <svg viewBox="0 0 192 192" className="w-full">
+    <svg viewBox="0 0 192 200" className="w-full">
       <defs>
-        <filter id="gaugeGlow">
+        <filter id="gaugeGlow" x="-20%" y="-20%" width="140%" height="140%">
           <feGaussianBlur in="SourceGraphic" stdDeviation="3" result="b" />
           <feMerge><feMergeNode in="b" /><feMergeNode in="SourceGraphic" /></feMerge>
         </filter>
+        <filter id="dotGlow" x="-80%" y="-80%" width="260%" height="260%">
+          <feGaussianBlur in="SourceGraphic" stdDeviation="4" result="b" />
+          <feMerge><feMergeNode in="b" /><feMergeNode in="SourceGraphic" /></feMerge>
+        </filter>
+        <radialGradient id="centerFade" cx="50%" cy="50%" r="50%">
+          <stop offset="0%" stopColor={color} stopOpacity="0.06" />
+          <stop offset="100%" stopColor={color} stopOpacity="0" />
+        </radialGradient>
       </defs>
+
+      {/* Subtle center glow */}
+      <circle cx={cx} cy={cy} r="52" fill="url(#centerFade)" />
 
       {/* Background arc */}
       <circle
         cx={cx} cy={cy} r={R}
-        fill="none" stroke="rgba(30,41,59,0.8)" strokeWidth="10"
+        fill="none" stroke="#0f172a" strokeWidth="11"
         strokeDasharray={`${arcLen} ${gap}`}
         strokeLinecap="round"
         transform={`rotate(150 ${cx} ${cy})`}
@@ -56,31 +75,52 @@ function EGFRGauge({ egfr, ckdStage }) {
         style={{ transition: 'stroke-dasharray 0.9s cubic-bezier(0.4,0,0.2,1), stroke 0.5s' }}
       />
 
-      {/* Tick marks */}
-      {[0, 30, 60, 90, 120].map((val, i) => {
-        const angle = (150 + (val / 120) * 240) * (Math.PI / 180);
-        const r1 = R + 10, r2 = R + 16;
+      {/* Tick marks + scale labels */}
+      {TICKS.map((val) => {
+        const angle   = (150 + (val / 120) * 240) * (Math.PI / 180);
+        const r1 = R + 12, r2 = R + 19, rL = R + 27;
+        const active  = val <= egfr;
         return (
-          <line key={i}
-            x1={cx + r1 * Math.cos(angle)} y1={cy + r1 * Math.sin(angle)}
-            x2={cx + r2 * Math.cos(angle)} y2={cy + r2 * Math.sin(angle)}
-            stroke={val <= egfr ? color : '#334155'} strokeWidth="1.5"
-            opacity={val <= egfr ? 0.7 : 0.3}
-          />
+          <g key={val}>
+            <line
+              x1={cx + r1 * Math.cos(angle)} y1={cy + r1 * Math.sin(angle)}
+              x2={cx + r2 * Math.cos(angle)} y2={cy + r2 * Math.sin(angle)}
+              stroke={active ? color : '#334155'} strokeWidth="1.5"
+              opacity={active ? 0.75 : 0.3}
+            />
+            <text
+              x={cx + rL * Math.cos(angle)} y={cy + rL * Math.sin(angle) + 3}
+              textAnchor="middle" fill={active ? color : '#475569'}
+              fontSize="7.5" fontFamily="Inter, sans-serif"
+              opacity={active ? 0.75 : 0.35}
+            >
+              {val}
+            </text>
+          </g>
         );
       })}
 
+      {/* Glowing tip dot */}
+      {frac > 0 && (
+        <circle cx={tipX} cy={tipY} r="5.5" fill={color}
+          filter="url(#dotGlow)" opacity="0.95"
+          style={{ transition: 'cx 0.9s cubic-bezier(0.4,0,0.2,1), cy 0.9s cubic-bezier(0.4,0,0.2,1)' }}
+        />
+      )}
+
       {/* Center value */}
-      <text x={cx} y={cy - 8} textAnchor="middle" fill={color}
-        fontSize="26" fontFamily="Orbitron, sans-serif" fontWeight="700">
-        {egfr}
+      <text x={cx} y={cy - 6} textAnchor="middle" fill={color}
+        fontSize="28" fontFamily="Orbitron, sans-serif" fontWeight="700"
+        style={{ transition: 'fill 0.5s' }}>
+        {Math.round(egfr)}
       </text>
-      <text x={cx} y={cy + 10} textAnchor="middle" fill="#64748b" fontSize="8"
-        fontFamily="Inter, sans-serif">
+      <text x={cx} y={cy + 12} textAnchor="middle" fill="#475569" fontSize="8"
+        fontFamily="Inter, sans-serif" letterSpacing="0.3">
         mL/min/1.73m²
       </text>
-      <text x={cx} y={cy + 26} textAnchor="middle" fill={color} fontSize="10"
-        fontFamily="Orbitron, sans-serif" fontWeight="600" opacity="0.85">
+      <text x={cx} y={cy + 28} textAnchor="middle" fill={color} fontSize="10"
+        fontFamily="Orbitron, sans-serif" fontWeight="600" opacity="0.9"
+        style={{ transition: 'fill 0.5s' }}>
         {ckdStage.stage}
       </text>
     </svg>
@@ -88,28 +128,42 @@ function EGFRGauge({ egfr, ckdStage }) {
 }
 
 /* ── Metric card ─────────────────────────────────── */
-function MetricCard({ label, value, unit, status, subtext, large }) {
-  const colors = {
-    safe:     { ring: 'border-emerald-400/25', val: 'text-emerald-400', bg: 'bg-emerald-400/6', dot: 'bg-emerald-400', shadow: 'shadow-green-glow' },
-    warning:  { ring: 'border-amber-400/30',   val: 'text-amber-400',   bg: 'bg-amber-400/6',   dot: 'bg-amber-400',   shadow: 'shadow-amber-glow' },
-    critical: { ring: 'border-red-400/35',      val: 'text-red-400',     bg: 'bg-red-400/8',     dot: 'bg-red-400',     shadow: 'shadow-red-glow' },
-    neutral:  { ring: 'border-cyan-500/20',     val: 'text-cyan-300',    bg: 'bg-cyan-500/6',    dot: 'bg-cyan-400',    shadow: '' },
-  };
-  const c = colors[status] || colors.neutral;
+const CARD_THEME = {
+  safe:     { ring: 'border-emerald-400/25', val: '#10b981', accent: '#10b981', bg: 'rgba(16,185,129,0.05)',  dot: 'bg-emerald-400', shadow: 'shadow-green-glow'  },
+  warning:  { ring: 'border-amber-400/30',   val: '#fbbf24', accent: '#fbbf24', bg: 'rgba(251,191,36,0.05)', dot: 'bg-amber-400',   shadow: 'shadow-amber-glow'  },
+  critical: { ring: 'border-red-400/35',     val: '#f87171', accent: '#ef4444', bg: 'rgba(248,113,113,0.07)',dot: 'bg-red-400',     shadow: 'shadow-red-glow'    },
+  neutral:  { ring: 'border-cyan-500/20',    val: '#67e8f9', accent: '#00d4ff', bg: 'rgba(0,212,255,0.04)',  dot: 'bg-cyan-400',    shadow: ''                   },
+};
 
+function MetricCard({ label, value, unit, status, subtext }) {
+  const c = CARD_THEME[status] || CARD_THEME.neutral;
   return (
-    <div className={`rounded-xl p-3 border ${c.ring} ${c.bg} ${c.shadow} transition-all duration-500`}>
-      <div className="flex items-start justify-between mb-1">
-        <span className="text-[10px] text-slate-500 uppercase tracking-widest">{label}</span>
-        <span className={`w-1.5 h-1.5 rounded-full status-dot ${c.dot}`} />
+    <div
+      className={`rounded-xl border ${c.ring} ${c.shadow} overflow-hidden transition-all duration-500`}
+      style={{ background: c.bg }}
+    >
+      {/* Colored accent stripe */}
+      <div className="h-[2px] w-full" style={{ background: c.accent, opacity: 0.7 }} />
+      <div className="p-3">
+        <div className="flex items-center justify-between mb-1.5">
+          <span className="text-[9px] text-slate-500 uppercase tracking-widest leading-none">{label}</span>
+          <span className={`w-1.5 h-1.5 rounded-full status-dot flex-shrink-0 ${c.dot}`} />
+        </div>
+        <div className="flex items-baseline gap-1 min-w-0">
+          <span
+            className="font-orbitron font-bold text-lg leading-none truncate value-transition"
+            style={{ color: c.val }}
+          >
+            {value}
+          </span>
+          <span className="text-[9px] text-slate-600 flex-shrink-0">{unit}</span>
+        </div>
+        {subtext && (
+          <p className="text-[9px] mt-1.5 font-medium" style={{ color: c.accent + 'bb' }}>
+            {subtext}
+          </p>
+        )}
       </div>
-      <div className="flex items-baseline gap-1.5">
-        <span className={`font-orbitron font-bold ${c.val} ${large ? 'text-2xl' : 'text-lg'} value-transition`}>
-          {value}
-        </span>
-        <span className="text-[10px] text-slate-600">{unit}</span>
-      </div>
-      {subtext && <p className="text-[10px] text-slate-500 mt-0.5">{subtext}</p>}
     </div>
   );
 }
@@ -351,8 +405,8 @@ export default function ResultsPanel({ results, patientData, relationshipData, e
   const mapStatus      = getStatus(patientData.map, 65, 100, 55, 115);
   const uoStatus       = patientData.urineOutput < 400 ? 'critical' :
                          patientData.urineOutput < 800 ? 'warning' : 'safe';
-  const creatStatus    = patientData.creatinine > 2.0 ? 'warning' :
-                         patientData.creatinine > 5.0 ? 'critical' : 'safe';
+  const creatStatus    = patientData.creatinine > 5.0 ? 'critical' :
+                         patientData.creatinine > 1.3 ? 'warning' : 'safe';
 
   // Stage severity bar data
   const barData = STAGE_BARS.map(s => ({
@@ -482,25 +536,39 @@ export default function ResultsPanel({ results, patientData, relationshipData, e
             status={riskLevel} subtext={`${risks.length} flag${risks.length !== 1 ? 's' : ''} active`}
           />
           <MetricCard
-            label="Creatinine" value={patientData.creatinine} unit="mg/dL"
-            status={creatStatus} subtext={patientData.creatinine > 1.3 ? 'Elevated' : 'Normal'}
+            label="Creatinine"
+            value={parseFloat(patientData.creatinine).toFixed(1)}
+            unit="mg/dL"
+            status={creatStatus}
+            subtext={patientData.creatinine > 5.0 ? 'Critical' : patientData.creatinine > 1.3 ? 'Elevated' : 'Normal'}
           />
           <MetricCard
-            label="Potassium" value={patientData.potassium} unit="mEq/L"
+            label="Potassium"
+            value={parseFloat(patientData.potassium).toFixed(1)}
+            unit="mEq/L"
             status={kStatus}
             subtext={patientData.potassium > 5.5 ? 'Hyperkalemia' : patientData.potassium < 3.5 ? 'Hypokalemia' : 'Normal'}
           />
           <MetricCard
-            label="MAP" value={patientData.map} unit="mmHg"
-            status={mapStatus} subtext={patientData.map > 100 ? 'Elevated' : 'Normal'}
+            label="MAP"
+            value={Math.round(patientData.map)}
+            unit="mmHg"
+            status={mapStatus}
+            subtext={patientData.map > 100 ? 'Elevated' : 'Normal'}
           />
           <MetricCard
-            label="Urine Output" value={patientData.urineOutput} unit="mL/d"
-            status={uoStatus} subtext={patientData.urineOutput < 500 ? 'Oliguria' : 'Adequate'}
+            label="Urine Out"
+            value={Math.round(patientData.urineOutput).toLocaleString()}
+            unit="mL/d"
+            status={uoStatus}
+            subtext={patientData.urineOutput < 400 ? 'Oliguria' : patientData.urineOutput < 800 ? 'Low' : 'Adequate'}
           />
           <MetricCard
-            label="GFR Score" value={egfr} unit="mL/min"
-            status={egfrStatus} subtext={ckdStage.shortLabel}
+            label="GFR Score"
+            value={Math.round(egfr)}
+            unit="mL/min"
+            status={egfrStatus}
+            subtext={ckdStage.shortLabel}
           />
         </div>
 

@@ -6,7 +6,7 @@
   "scripts": {
     "dev": "node node_modules/vite/bin/vite.js",
     "dev:server": "node backend/server.js",
-    "dev:ml": "python -m uvicorn main:app --host 127.0.0.1 --port 8000 --app-dir backend",
+    "dev:ml": "../backend/venv/bin/python -m uvicorn main:app --host 127.0.0.1 --port 8000 --app-dir backend",
     "dev:full": "node \"./node_modules/concurrently/dist/bin/concurrently.js\" \"npm run dev\" \"npm run dev:server\" \"npm run dev:ml\"",
     "build": "node node_modules/vite/bin/vite.js build",
     "preview": "node node_modules/vite/bin/vite.js preview"

@@ -24,6 +24,9 @@ import {
 const INITIAL     = PRESETS.normal;
 const DEFAULT_EQUATION_KEY = 'ckd-epi-2009';
 const MAX_HISTORY = 30;
+const ML_BASE = import.meta.env.VITE_ML_API_URL || '/ml';
+const SIMULATION_BASE = import.meta.env.VITE_SIMULATION_API_URL ?? 'http://localhost:8787';
+const KIDNEY_APP_URL = import.meta.env.VITE_KIDNEY_APP_URL || 'http://localhost:8081';
 const AUTO_PROP_FIELDS = ['creatinine', 'hemoglobin', 'hdlCholesterol', 'totalCholesterol', 'diabetes', 'hypertension'];
 
 const clamp = (v, lo, hi) => Math.max(lo, Math.min(hi, v));
@@ -82,7 +85,7 @@ function runLocalConditionalPropagation(prevData, nextData, changedKey) {
 
 export default function App() {
   const [egfrEquationKey, setEgfrEquationKey] = useState(DEFAULT_EQUATION_KEY);
-  const [activeNav,    setActiveNav]    = useState('simulation');
+  const [activeNav,    setActiveNav]    = useState('dashboard');
   const [patientData,  setPatientData]  = useState(INITIAL);
   const [history,      setHistory]      = useState([]);
   const [beforeEGFR,   setBeforeEGFR]   = useState(null);
@@ -145,7 +148,7 @@ export default function App() {
     const timer = setTimeout(async () => {
       setFuturePredictions(p => ({ ...p, loading: true }));
       try {
-        const res = await fetch('/ml/predict_future_egfr', {
+        const res = await fetch(`${ML_BASE}/predict_future_egfr`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
@@ -199,7 +202,7 @@ export default function App() {
           },
         };
 
-        const response = await fetch('http://localhost:8787/api/simulation', {
+        const response = await fetch(`${SIMULATION_BASE}/api/simulation`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify(payload),
@@ -309,7 +312,7 @@ export default function App() {
       style={{ background: 'linear-gradient(180deg, #071428 0%, #050d1d 58%, #040916 100%)' }}
     >
       {/* 1 — Sidebar */}
-      <Sidebar activeNav={activeNav} setActiveNav={setActiveNav} alertCount={alertCount} />
+      <Sidebar activeNav={activeNav} setActiveNav={setActiveNav} />
 
       {/* Navigation-based rendering — scrollable so ML / relationships pages are not clipped by overflow-hidden */}
       {activeNav === 'similarity' && (
@@ -332,7 +335,15 @@ export default function App() {
           <EquationsPrediction />
         </div>
       )}
-      {['dashboard', 'patient', 'simulation', 'alerts', 'settings'].includes(activeNav) && (
+      {activeNav === 'labentry' && (
+        <iframe
+          src={KIDNEY_APP_URL}
+          className="flex-1 min-h-0 min-w-0 border-0"
+          title="Lab Entry"
+          allow="clipboard-read; clipboard-write"
+        />
+      )}
+      {activeNav === 'dashboard' && (
         <>
           {/* 2 — Control panel */}
           <ControlPanel

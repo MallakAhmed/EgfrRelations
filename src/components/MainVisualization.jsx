@@ -10,7 +10,7 @@ import { calculateEGFR } from '../utils/egfrCalculation.js';
 
 /* ── Animated counter ────────────────────────────── */
 function AnimatedNumber({ value, decimals = 0 }) {
-  const [display, setDisplay] = useState(value);
+  const [display, setDisplay] = useState(parseFloat(value.toFixed(decimals)));
   const raf     = useRef(null);
   const startRef = useRef({ from: value, start: null });
 
@@ -54,6 +54,38 @@ function StagePill({ ckdStage }) {
       <span className="w-1.5 h-1.5 rounded-full status-dot" style={{ background: ckdStage.gaugeColor }} />
       {ckdStage.stage}
       <span className="text-[10px] opacity-70 font-normal">— {ckdStage.description}</span>
+    </div>
+  );
+}
+
+/* ── Metric card ─────────────────────────────────── */
+const STATUS_STYLES = {
+  safe:     { border: 'border-emerald-500/30', val: '#10b981', bg: 'rgba(16,185,129,0.06)',  dot: '#10b981', ref: 'Normal'   },
+  warning:  { border: 'border-amber-400/35',   val: '#fbbf24', bg: 'rgba(251,191,36,0.06)',  dot: '#fbbf24', ref: 'Elevated' },
+  critical: { border: 'border-red-400/40',      val: '#f87171', bg: 'rgba(248,113,113,0.07)', dot: '#ef4444', ref: 'Critical' },
+  neutral:  { border: 'border-cyan-500/20',     val: '#67e8f9', bg: 'rgba(0,212,255,0.05)',   dot: '#00d4ff', ref: ''        },
+};
+
+function StatCard({ label, value, unit, status = 'neutral', ref: refRange, sub }) {
+  const s = STATUS_STYLES[status] ?? STATUS_STYLES.neutral;
+  return (
+    <div
+      className={`glass-card rounded-xl p-3 text-center border ${s.border} transition-all duration-500`}
+      style={{ background: s.bg }}
+    >
+      <div className="flex items-center justify-between mb-1.5">
+        <p className="text-[8px] text-slate-500 uppercase tracking-widest">{label}</p>
+        <span className="w-1.5 h-1.5 rounded-full status-dot flex-shrink-0" style={{ background: s.dot }} />
+      </div>
+      <p className="font-orbitron text-lg font-bold leading-none" style={{ color: s.val }}>
+        {value}
+      </p>
+      <p className="text-[8px] text-slate-600 mt-1">{unit}</p>
+      {(refRange || sub) && (
+        <p className="text-[7px] mt-1 font-medium" style={{ color: s.dot + 'aa' }}>
+          {refRange || sub}
+        </p>
+      )}
     </div>
   );
 }
@@ -175,34 +207,28 @@ export default function MainVisualization({ results, history, beforeEGFR, patien
       <div className="flex-1 flex items-center justify-center gap-8 px-6 py-2 min-h-0">
 
         {/* Left metrics column */}
-        <div className="flex flex-col gap-4 w-28">
-          <div className="glass-card rounded-xl p-3 text-center border-glow">
-            <p className="text-[9px] text-slate-500 uppercase tracking-widest mb-1">Creatinine</p>
-            <p className="font-orbitron text-lg font-bold" style={{ color }}>
-              {patientData.creatinine}
-            </p>
-            <p className="text-[9px] text-slate-600">mg/dL</p>
-          </div>
-          <div className="glass-card rounded-xl p-3 text-center">
-            <p className="text-[9px] text-slate-500 uppercase tracking-widest mb-1">K⁺ Level</p>
-            <p className={`font-orbitron text-lg font-bold ${
-              patientData.potassium > 5.5 ? 'text-red-400' :
-              patientData.potassium > 5.0 ? 'text-amber-400' : 'text-emerald-400'
-            }`}>
-              {patientData.potassium}
-            </p>
-            <p className="text-[9px] text-slate-600">mEq/L</p>
-          </div>
-          <div className="glass-card rounded-xl p-3 text-center">
-            <p className="text-[9px] text-slate-500 uppercase tracking-widest mb-1">MAP</p>
-            <p className={`font-orbitron text-lg font-bold ${
-              patientData.map > 110 ? 'text-red-400' :
-              patientData.map > 100 ? 'text-amber-400' : 'text-cyan-400'
-            }`}>
-              {patientData.map}
-            </p>
-            <p className="text-[9px] text-slate-600">mmHg</p>
-          </div>
+        <div className="flex flex-col gap-3 w-28">
+          <StatCard
+            label="Creatinine"
+            value={parseFloat(patientData.creatinine).toFixed(1)}
+            unit="mg/dL"
+            status={patientData.creatinine > 5.0 ? 'critical' : patientData.creatinine > 1.3 ? 'warning' : 'safe'}
+            refRange={patientData.creatinine > 1.3 ? '↑ High' : '0.7–1.3'}
+          />
+          <StatCard
+            label="K⁺ Level"
+            value={parseFloat(patientData.potassium).toFixed(1)}
+            unit="mEq/L"
+            status={patientData.potassium > 5.5 || patientData.potassium < 3.0 ? 'critical' : patientData.potassium > 5.0 || patientData.potassium < 3.5 ? 'warning' : 'safe'}
+            refRange="3.5–5.0"
+          />
+          <StatCard
+            label="MAP"
+            value={Math.round(patientData.map)}
+            unit="mmHg"
+            status={patientData.map > 115 || patientData.map < 55 ? 'critical' : patientData.map > 100 || patientData.map < 65 ? 'warning' : 'safe'}
+            refRange="65–100"
+          />
         </div>
 
         {/* Kidney + overlay */}
@@ -214,10 +240,10 @@ export default function MainVisualization({ results, history, beforeEGFR, patien
             <div className="flex items-baseline justify-center gap-2">
               <span
                 className="font-orbitron text-5xl font-bold glow-text number-animate"
-                key={egfr}
+                key={Math.round(egfr)}
                 style={{ color }}
               >
-                <AnimatedNumber value={egfr} />
+                <AnimatedNumber value={Math.round(egfr)} />
               </span>
               <span className="text-sm text-slate-500 font-medium">mL/min/1.73m²</span>
             </div>
@@ -229,27 +255,26 @@ export default function MainVisualization({ results, history, beforeEGFR, patien
         </div>
 
         {/* Right metrics column */}
-        <div className="flex flex-col gap-4 w-28">
-          <div className="glass-card rounded-xl p-3 text-center border-glow">
-            <p className="text-[9px] text-slate-500 uppercase tracking-widest mb-1">Age / Sex</p>
-            <p className="font-orbitron text-sm font-bold text-slate-300">{patientData.age}</p>
-            <p className="text-[9px] text-slate-500 capitalize">{patientData.gender}</p>
-          </div>
-          <div className="glass-card rounded-xl p-3 text-center">
-            <p className="text-[9px] text-slate-500 uppercase tracking-widest mb-1">Urine Out</p>
-            <p className={`font-orbitron text-sm font-bold ${
-              patientData.urineOutput < 400 ? 'text-red-400' :
-              patientData.urineOutput < 800 ? 'text-amber-400' : 'text-emerald-400'
-            }`}>
-              {patientData.urineOutput}
-            </p>
-            <p className="text-[9px] text-slate-600">mL/day</p>
-          </div>
-          <div className="glass-card rounded-xl p-3 text-center">
-            <p className="text-[9px] text-slate-500 uppercase tracking-widest mb-1">Weight</p>
-            <p className="font-orbitron text-sm font-bold text-slate-300">{patientData.weight}</p>
-            <p className="text-[9px] text-slate-600">kg</p>
-          </div>
+        <div className="flex flex-col gap-3 w-28">
+          <StatCard
+            label="Age / Sex"
+            value={Math.round(patientData.age)}
+            unit={String(patientData.gender || '').toLowerCase() === 'male' ? 'Male' : 'Female'}
+            status="neutral"
+          />
+          <StatCard
+            label="Urine Out"
+            value={Math.round(patientData.urineOutput).toLocaleString()}
+            unit="mL/day"
+            status={patientData.urineOutput < 400 ? 'critical' : patientData.urineOutput < 800 ? 'warning' : 'safe'}
+            refRange={patientData.urineOutput < 400 ? 'Oliguria' : patientData.urineOutput < 800 ? 'Low' : '≥800'}
+          />
+          <StatCard
+            label="Weight"
+            value={Math.round(patientData.weight)}
+            unit="kg"
+            status="neutral"
+          />
         </div>
       </div>
 
@@ -260,12 +285,12 @@ export default function MainVisualization({ results, history, beforeEGFR, patien
         {beforeEGFR !== null && (
           <div className="flex items-center gap-3 px-4 py-2.5 glass-card rounded-xl slide-in-right">
             <span className="text-[11px] text-slate-500">Before Sim:</span>
-            <span className="font-orbitron text-sm font-bold text-slate-400">{beforeEGFR}</span>
+            <span className="font-orbitron text-sm font-bold text-slate-400">{Math.round(beforeEGFR)}</span>
             <span className="text-slate-600">→</span>
-            <span className="font-orbitron text-sm font-bold" style={{ color }}>{egfr}</span>
+            <span className="font-orbitron text-sm font-bold" style={{ color }}>{Math.round(egfr)}</span>
             <span className="text-[11px] text-slate-500">mL/min</span>
             <span className={`ml-1 text-[11px] font-semibold ${egfr >= beforeEGFR ? 'text-emerald-400' : 'text-red-400'}`}>
-              ({egfr >= beforeEGFR ? '+' : ''}{egfr - beforeEGFR})
+              ({egfr >= beforeEGFR ? '+' : ''}{Math.round(egfr - beforeEGFR)})
             </span>
             <div className="flex-1" />
             <span className="text-[10px] text-slate-600">GFR before vs after</span>

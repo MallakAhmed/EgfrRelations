@@ -16,7 +16,7 @@ import {
 } from '../utils/caseLibrary.js';
 import { getCKDStage } from '../utils/egfrCalculation.js';
 
-const ML_BASE = import.meta.env.DEV ? '/ml' : 'http://127.0.0.1:8000';
+const ML_BASE = import.meta.env.VITE_ML_API_URL || '/ml';
 const CLUSTER_PALETTE = ['#22d3ee', '#a78bfa', '#fb923c', '#4ade80', '#f472b6', '#38bdf8'];
 
 const FEATURE_LABELS = {
